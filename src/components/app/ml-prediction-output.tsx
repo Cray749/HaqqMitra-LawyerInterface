@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DollarSign, Clock, AlertTriangle, ThumbsUp, TrendingUp, TrendingDown, ListChecks } from 'lucide-react';
+import { DollarSign, Clock, AlertTriangle, ThumbsUp, TrendingUp, TrendingDown } from 'lucide-react'; // Removed ListChecks
 import * as React from 'react';
 
 interface MlPredictionOutputProps {
@@ -32,7 +32,7 @@ export function MlPredictionOutput({ isLoading, data }: MlPredictionOutputProps)
       <div className="space-y-4">
         <h2 className="font-headline text-2xl font-semibold mb-4">ML Predictions</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {[...Array(6)].map((_, i) => ( // Increased skeleton count for new fields
+          {[...Array(4)].map((_, i) => ( // Adjusted skeleton count
             <Card key={i} className="shadow-lg">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <Skeleton className="h-5 w-1/3" />
@@ -45,8 +45,8 @@ export function MlPredictionOutput({ isLoading, data }: MlPredictionOutputProps)
             </Card>
           ))}
         </div>
-        <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
-            {[...Array(3)].map((_,i) => (
+        <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2"> 
+            {[...Array(2)].map((_,i) => ( // Adjusted for 2 text cards
                  <Card key={`sk-text-${i}`} className="shadow-lg">
                     <CardHeader><Skeleton className="h-6 w-2/5" /></CardHeader>
                     <CardContent><Skeleton className="h-20 w-full" /></CardContent>
@@ -70,7 +70,6 @@ export function MlPredictionOutput({ isLoading, data }: MlPredictionOutputProps)
 
   const strongPointsList = parseListString(data.strongPoints);
   const weakPointsList = parseListString(data.weakPoints);
-  const powerpointOutlineList = parseListString(data.powerpointOutline);
 
   return (
     <div className="space-y-6">
@@ -95,7 +94,7 @@ export function MlPredictionOutput({ isLoading, data }: MlPredictionOutputProps)
         </MetricCard>
       </div>
 
-      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-2">
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="flex items-center text-lg font-medium">
@@ -137,29 +136,7 @@ export function MlPredictionOutput({ isLoading, data }: MlPredictionOutputProps)
             )}
           </CardContent>
         </Card>
-
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="flex items-center text-lg font-medium">
-              <ListChecks className="h-5 w-5 mr-2 text-primary" /> PowerPoint Outline
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {powerpointOutlineList.length > 0 ? (
-            <ScrollArea className="h-48 custom-scrollbar pr-3">
-              <ul className="space-y-2 list-disc list-inside pl-2 text-sm">
-                {powerpointOutlineList.map((item, index) => (
-                  <li key={index}>{item}</li>
-                ))}
-              </ul>
-            </ScrollArea>
-            ) : (
-               <p className="text-sm text-muted-foreground">PowerPoint outline not available.</p>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
 }
-

@@ -1,5 +1,4 @@
 
-
 "use client";
 
 import * as React from 'react';
@@ -17,9 +16,9 @@ import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { MessageSquareText, X } from 'lucide-react';
+import { MessageSquareText, X, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { generatePowerpointOutline, GeneratePowerpointOutlineInput } from '@/ai/flows/generate-powerpoint-outline';
+// Removed: import { generatePowerpointOutline, GeneratePowerpointOutlineInput } from '@/ai/flows/generate-powerpoint-outline';
 import { generateWeakPointsSummary, GenerateWeakPointsSummaryInput } from '@/ai/flows/generate-weak-points-summary';
 
 // Dummy initial spaces
@@ -28,6 +27,8 @@ const initialSpaces: Space[] = [
   { id: 'space-2', name: 'Patent Dispute Gamma' },
   { id: 'space-3', name: 'Corporate Litigation Delta' },
 ];
+
+type ViewMode = 'details' | 'chatActive';
 
 export default function AppPage() {
   const { toast } = useToast();
@@ -44,16 +45,14 @@ export default function AppPage() {
   const [isBotReplying, setIsBotReplying] = React.useState(false);
 
   const [isChatSheetOpen, setIsChatSheetOpen] = React.useState(false);
+  const [viewMode, setViewMode] = React.useState<ViewMode>('details');
 
   const currentSpace = React.useMemo(() => spaces.find(s => s.id === selectedSpaceId), [spaces, selectedSpaceId]);
 
-  // Load data for selected space (placeholder for now)
   React.useEffect(() => {
     if (selectedSpaceId) {
-      // Here you would typically load data associated with the selected space
-      // For now, we just log it and reset the form for a "new thread" in this space
       console.log(`Selected space: ${selectedSpaceId}`);
-      // clearAllStates(false); // Optionally reset when space changes
+      // clearAllStates(false); // Optionally reset when space changes, ensure viewMode is reset too
     }
   }, [selectedSpaceId]);
 
@@ -74,6 +73,7 @@ export default function AppPage() {
     setMlOutput(null);
     setIsMlLoading(false);
     setChatMessages([]);
+    setViewMode('details'); // Reset view mode
     // setChatHistory([]); // User might want to keep history across threads within a space
     if (showToast) {
       toast({ title: "New Thread Started", description: "All inputs and outputs have been cleared."});
@@ -93,36 +93,21 @@ export default function AppPage() {
 
     try {
       // Prepare AI inputs
-      const powerpointInput: GeneratePowerpointOutlineInput = {
-        caseTitle: data.caseTitle,
-        courtTribunal: data.courtTribunal,
-        jurisdiction: data.jurisdiction,
-        caseType: data.caseType,
-        plaintiffsDefendants: data.plaintiffsDefendants,
-        briefDescription: data.briefDescription,
-        keyDates: `Filing: ${data.filingDate ? data.filingDate.toLocaleDateString() : 'N/A'}, Hearing: ${data.nextHearingDate ? data.nextHearingDate.toLocaleDateString() : 'N/A'}`,
-        uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
-      };
-      
       const weakPointsInput: GenerateWeakPointsSummaryInput = {
         caseDetails: JSON.stringify(data), // Pass full case details
         uploadedDocuments: uploadedFiles.map(f => f.name),
       };
 
-      // Simulate parallel AI calls
-      const [powerpointResult, weakPointsResult] = await Promise.all([
-        generatePowerpointOutline(powerpointInput),
-        generateWeakPointsSummary(weakPointsInput), // This flow now returns strong and weak points
-      ]);
+      // AI call for weak points (which now includes strong points)
+      const weakPointsResult = await generateWeakPointsSummary(weakPointsInput);
       
       const generatedMlOutput: MlOutputData = {
         estimatedCost: `$${(Math.random() * 100000 + 5000).toFixed(0)}`,
         expectedDuration: `${Math.floor(Math.random() * 12) + 1} months / ${Math.floor(Math.random() * 20) + 1} days`,
         strongPoints: weakPointsResult.strongPointsSummary,
         weakPoints: weakPointsResult.weakPointsSummary,
-        powerpointOutline: powerpointResult.powerpointOutline, 
-        winProbability: Math.floor(Math.random() * 50) + 45, // e.g. 45-94%
-        lossProbability: Math.floor(Math.random() * 50) + 5, // e.g. 5-54% (can be independent of win)
+        winProbability: Math.floor(Math.random() * 50) + 45, 
+        lossProbability: Math.floor(Math.random() * 50) + 5,
       };
       setMlOutput(generatedMlOutput);
       toast({ title: "Prediction Complete", description: "ML analysis results are now available."});
@@ -139,6 +124,7 @@ export default function AppPage() {
     const userMessage: ChatMessage = { id: crypto.randomUUID(), text, sender: 'user', timestamp: new Date() };
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
+    setViewMode('chatActive'); // Switch view when a message is sent
 
     // Simulate bot reply
     setTimeout(() => {
@@ -159,7 +145,7 @@ export default function AppPage() {
         question: userMessage.text,
         answer: botReply.text,
       };
-      setChatHistory(prev => [historyItem, ...prev]); // Add to top
+      setChatHistory(prev => [historyItem, ...prev]); 
     }, 1000);
   };
 
@@ -178,19 +164,40 @@ export default function AppPage() {
           onSelectSpace={handleSelectSpace}
           className="hidden md:block"
         />
-        <div className="flex flex-1 flex-col"> {/* Main content + right panel area */}
+        <div className="flex flex-1 flex-col"> 
             <SidebarInset className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
-              <HeaderControls onNewThread={clearAllStates} spaceName={currentSpace?.name} />
+              <HeaderControls 
+                onNewThread={clearAllStates} 
+                spaceName={currentSpace?.name} 
+                viewMode={viewMode}
+                onViewDetails={() => setViewMode('details')}
+              />
               <main className="flex-1 p-4 md:p-6 space-y-8">
-                <CaseDetailsForm onSubmit={handleFormSubmit} initialData={currentCaseDetails} isSubmitting={isMlLoading} />
-                <DocumentUploadPanel files={uploadedFiles} onFilesChange={setUploadedFiles} />
-                {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput)) && (
-                  <MlPredictionOutput isLoading={isMlLoading} data={mlOutput} />
+                {viewMode === 'details' && (
+                  <>
+                    <CaseDetailsForm onSubmit={handleFormSubmit} initialData={currentCaseDetails} isSubmitting={isMlLoading} />
+                    <DocumentUploadPanel files={uploadedFiles} onFilesChange={setUploadedFiles} />
+                    {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput)) && (
+                      <MlPredictionOutput isLoading={isMlLoading} data={mlOutput} />
+                    )}
+                  </>
+                )}
+                {viewMode === 'chatActive' && (
+                  <div className="flex flex-col items-center justify-center h-full text-center py-10">
+                    <MessageSquareText size={56} className="text-muted-foreground mb-4" />
+                    <h2 className="text-xl font-semibold mb-2">Chat Active</h2>
+                    <p className="text-muted-foreground mb-6 max-w-md">
+                      The case details and predictions are hidden to give you a focused chat experience. 
+                      You can bring them back using the button in the header or below.
+                    </p>
+                    <Button onClick={() => setViewMode('details')} variant="outline" size="lg">
+                      <FileText size={18} className="mr-2" /> View Case Details & Predictions
+                    </Button>
+                  </div>
                 )}
               </main>
             </SidebarInset>
         </div>
-         {/* Right Panel: Chatbot and History - Fixed for lg screens, Sheet for smaller */}
         <aside className="hidden lg:flex flex-col w-[380px] xl:w-[420px] border-l bg-card h-screen sticky top-0">
           <div className="flex-1 min-h-0">
             <ChatbotWidget messages={chatMessages} onSendMessage={handleSendMessage} isSending={isBotReplying} />
@@ -200,7 +207,6 @@ export default function AppPage() {
           </div>
         </aside>
 
-        {/* Floating Action Button for Chat on smaller screens */}
         <div className="lg:hidden fixed bottom-6 right-6 z-50">
           <Sheet open={isChatSheetOpen} onOpenChange={setIsChatSheetOpen}>
             <SheetTrigger asChild>
@@ -228,17 +234,3 @@ export default function AppPage() {
     </SidebarProvider>
   );
 }
-
-// Helper components for main page structure
-const AppMainContent: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { state } = useSidebar();
-  return (
-    <main
-      className={`flex-1 flex flex-col transition-all duration-300 ease-in-out overflow-y-auto
-        ${state === 'expanded' ? 'md:ml-[var(--sidebar-width)]' : 'md:ml-[var(--sidebar-width-icon)]'}`}
-    >
-      {children}
-    </main>
-  );
-};
-

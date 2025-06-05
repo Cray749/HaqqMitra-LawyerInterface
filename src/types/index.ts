@@ -53,7 +53,6 @@ export interface MlOutputData {
   expectedDuration: string;
   strongPoints: string; // Will be a string from AI, then parsed
   weakPoints: string; // Will be a string from AI, then parsed
-  powerpointOutline: string; // Will be a string from AI, then parsed
   winProbability: number; // 0-100
   lossProbability: number; // 0-100
 }
@@ -72,4 +71,3 @@ export interface ChatHistoryItem {
   question: string;
   answer: string;
 }
-
