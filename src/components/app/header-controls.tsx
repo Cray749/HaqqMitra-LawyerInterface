@@ -21,7 +21,7 @@ export function HeaderControls({ onNewThread, spaceName, viewMode, onViewDetails
        <Button
           variant="outline"
           size="icon"
-          className="sm:hidden"
+          // className="sm:hidden" // Removed sm:hidden to make it always visible
           onClick={toggleSidebar}
         >
           <PanelLeft className="h-5 w-5" />

@@ -8,14 +8,11 @@ import {
   CaseDetailsForm,
   DocumentUploadPanel,
   MlPredictionOutput,
-  // ChatbotWidget, // No longer used directly here
-  // ChatHistory, // No longer used directly here
 } from '@/components/app';
 import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage, ChatHistoryItem } from '@/types';
 import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-// import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle } from '@/components/ui/sheet'; // No longer needed
 import { MessageSquareText, X, FileText, SendHorizonal, User, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generateWeakPointsSummary, GenerateWeakPointsSummaryInput } from '@/ai/flows/generate-weak-points-summary';
@@ -48,7 +45,6 @@ export default function AppPage() {
   const [isBotReplying, setIsBotReplying] = React.useState(false);
   const [chatInputText, setChatInputText] = React.useState('');
 
-  // const [isChatSheetOpen, setIsChatSheetOpen] = React.useState(false); // No longer needed
   const [viewMode, setViewMode] = React.useState<ViewMode>('details');
 
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
@@ -105,7 +101,7 @@ export default function AppPage() {
     try {
       const weakPointsInput: GenerateWeakPointsSummaryInput = {
         caseDetails: JSON.stringify(data),
-        uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name), // Prefer dataUrl if available
+        uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name), 
       };
 
       const weakPointsResult = await generateWeakPointsSummary(weakPointsInput);
@@ -167,10 +163,10 @@ export default function AppPage() {
           selectedSpaceId={selectedSpaceId}
           onAddSpace={handleAddSpace}
           onSelectSpace={handleSelectSpace}
-          className="hidden md:block"
+          // className="hidden md:block" // Removed to allow Sidebar component to control its visibility
         />
         <div className="flex flex-1 flex-col"> 
-            <SidebarInset className="flex-1 flex flex-col"> {/* Removed overflow-y-auto from here */}
+            <SidebarInset className="flex-1 flex flex-col">
               <HeaderControls 
                 onNewThread={clearAllStates} 
                 spaceName={currentSpace?.name} 
@@ -237,7 +233,6 @@ export default function AppPage() {
                   </div>
                 )}
               </main>
-              {/* Chat Input Area - always visible at the bottom of SidebarInset */}
               <div className="p-4 border-t bg-background">
                 <div className="flex items-center gap-2">
                   <Input
@@ -256,10 +251,7 @@ export default function AppPage() {
               </div>
             </SidebarInset>
         </div>
-        {/* Removed the right aside chat panel and the mobile Sheet for chat */}
       </div>
     </SidebarProvider>
   );
 }
-
-    
