@@ -1,4 +1,5 @@
 
+
 "use client";
 
 import * as React from 'react';
@@ -104,25 +105,26 @@ export default function AppPage() {
       };
       
       const weakPointsInput: GenerateWeakPointsSummaryInput = {
-        caseDetails: JSON.stringify(data),
+        caseDetails: JSON.stringify(data), // Pass full case details
         uploadedDocuments: uploadedFiles.map(f => f.name),
       };
 
       // Simulate parallel AI calls
       const [powerpointResult, weakPointsResult] = await Promise.all([
         generatePowerpointOutline(powerpointInput),
-        generateWeakPointsSummary(weakPointsInput),
+        generateWeakPointsSummary(weakPointsInput), // This flow now returns strong and weak points
       ]);
-
-      // Dummy data for other fields
-      const dummyMlOutput: MlOutputData = {
+      
+      const generatedMlOutput: MlOutputData = {
         estimatedCost: `$${(Math.random() * 100000 + 5000).toFixed(0)}`,
         expectedDuration: `${Math.floor(Math.random() * 12) + 1} months / ${Math.floor(Math.random() * 20) + 1} days`,
-        weakPoints: weakPointsResult.weakPointsSummary, // Assign the raw string
+        strongPoints: weakPointsResult.strongPointsSummary,
+        weakPoints: weakPointsResult.weakPointsSummary,
         powerpointOutline: powerpointResult.powerpointOutline, 
-        winLossProbability: Math.floor(Math.random() * 60) + 40, // 40-99%
+        winProbability: Math.floor(Math.random() * 50) + 45, // e.g. 45-94%
+        lossProbability: Math.floor(Math.random() * 50) + 5, // e.g. 5-54% (can be independent of win)
       };
-      setMlOutput(dummyMlOutput);
+      setMlOutput(generatedMlOutput);
       toast({ title: "Prediction Complete", description: "ML analysis results are now available."});
     } catch (error) {
       console.error("Error during ML prediction:", error);
@@ -239,3 +241,4 @@ const AppMainContent: React.FC<{ children: React.ReactNode }> = ({ children }) =
     </main>
   );
 };
+

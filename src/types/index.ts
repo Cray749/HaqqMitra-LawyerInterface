@@ -51,9 +51,11 @@ export interface UploadedFile {
 export interface MlOutputData {
   estimatedCost: string;
   expectedDuration: string;
+  strongPoints: string; // Will be a string from AI, then parsed
   weakPoints: string; // Will be a string from AI, then parsed
   powerpointOutline: string; // Will be a string from AI, then parsed
-  winLossProbability: number; // 0-100
+  winProbability: number; // 0-100
+  lossProbability: number; // 0-100
 }
 
 export interface ChatMessage {
@@ -70,3 +72,4 @@ export interface ChatHistoryItem {
   question: string;
   answer: string;
 }
+
