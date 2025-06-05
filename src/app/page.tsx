@@ -8,18 +8,21 @@ import {
   CaseDetailsForm,
   DocumentUploadPanel,
   MlPredictionOutput,
-  ChatbotWidget,
-  ChatHistory,
+  // ChatbotWidget, // No longer used directly here
+  // ChatHistory, // No longer used directly here
 } from '@/components/app';
 import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage, ChatHistoryItem } from '@/types';
 import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { MessageSquareText, X, FileText } from 'lucide-react';
+// import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle } from '@/components/ui/sheet'; // No longer needed
+import { MessageSquareText, X, FileText, SendHorizonal, User, Bot } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-// Removed: import { generatePowerpointOutline, GeneratePowerpointOutlineInput } from '@/ai/flows/generate-powerpoint-outline';
 import { generateWeakPointsSummary, GenerateWeakPointsSummaryInput } from '@/ai/flows/generate-weak-points-summary';
+import { Input } from '@/components/ui/input';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 // Dummy initial spaces
 const initialSpaces: Space[] = [
@@ -41,20 +44,28 @@ export default function AppPage() {
   const [isMlLoading, setIsMlLoading] = React.useState(false);
   
   const [chatMessages, setChatMessages] = React.useState<ChatMessage[]>([]);
-  const [chatHistory, setChatHistory] = React.useState<ChatHistoryItem[]>([]);
+  const [chatHistory, setChatHistory] = React.useState<ChatHistoryItem[]>([]); // Kept for data, not displayed
   const [isBotReplying, setIsBotReplying] = React.useState(false);
+  const [chatInputText, setChatInputText] = React.useState('');
 
-  const [isChatSheetOpen, setIsChatSheetOpen] = React.useState(false);
+  // const [isChatSheetOpen, setIsChatSheetOpen] = React.useState(false); // No longer needed
   const [viewMode, setViewMode] = React.useState<ViewMode>('details');
+
+  const messagesEndRef = React.useRef<HTMLDivElement>(null);
 
   const currentSpace = React.useMemo(() => spaces.find(s => s.id === selectedSpaceId), [spaces, selectedSpaceId]);
 
   React.useEffect(() => {
     if (selectedSpaceId) {
       console.log(`Selected space: ${selectedSpaceId}`);
-      // clearAllStates(false); // Optionally reset when space changes, ensure viewMode is reset too
     }
   }, [selectedSpaceId]);
+
+  React.useEffect(() => {
+    if (viewMode === 'chatActive' && messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, viewMode]);
 
   const handleAddSpace = (name: string) => {
     const newSpace: Space = { id: crypto.randomUUID(), name };
@@ -73,8 +84,8 @@ export default function AppPage() {
     setMlOutput(null);
     setIsMlLoading(false);
     setChatMessages([]);
-    setViewMode('details'); // Reset view mode
-    // setChatHistory([]); // User might want to keep history across threads within a space
+    setChatInputText('');
+    setViewMode('details'); 
     if (showToast) {
       toast({ title: "New Thread Started", description: "All inputs and outputs have been cleared."});
     }
@@ -84,7 +95,7 @@ export default function AppPage() {
     setCurrentCaseDetails(data);
     if (!data.enableMlPrediction) {
       toast({ title: "Case Saved (No Prediction)", description: "Case details saved without ML prediction."});
-      setMlOutput(null); // Clear any previous ML output
+      setMlOutput(null);
       return;
     }
 
@@ -92,13 +103,11 @@ export default function AppPage() {
     setMlOutput(null);
 
     try {
-      // Prepare AI inputs
       const weakPointsInput: GenerateWeakPointsSummaryInput = {
-        caseDetails: JSON.stringify(data), // Pass full case details
-        uploadedDocuments: uploadedFiles.map(f => f.name),
+        caseDetails: JSON.stringify(data),
+        uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name), // Prefer dataUrl if available
       };
 
-      // AI call for weak points (which now includes strong points)
       const weakPointsResult = await generateWeakPointsSummary(weakPointsInput);
       
       const generatedMlOutput: MlOutputData = {
@@ -121,12 +130,14 @@ export default function AppPage() {
   };
 
   const handleSendMessage = (text: string) => {
+    if (!text.trim()) return;
+
     const userMessage: ChatMessage = { id: crypto.randomUUID(), text, sender: 'user', timestamp: new Date() };
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
-    setViewMode('chatActive'); // Switch view when a message is sent
+    setViewMode('chatActive'); 
+    setChatInputText('');
 
-    // Simulate bot reply
     setTimeout(() => {
       const botReply: ChatMessage = {
         id: crypto.randomUUID(),
@@ -137,7 +148,6 @@ export default function AppPage() {
       setChatMessages(prev => [...prev, botReply]);
       setIsBotReplying(false);
 
-      // Save to history
       const historyItem: ChatHistoryItem = {
         id: crypto.randomUUID(),
         timestamp: new Date(),
@@ -147,11 +157,6 @@ export default function AppPage() {
       };
       setChatHistory(prev => [historyItem, ...prev]); 
     }, 1000);
-  };
-
-  const handleClearChatHistory = () => {
-    setChatHistory([]);
-    toast({ title: "Chat History Cleared" });
   };
   
   return (
@@ -165,72 +170,96 @@ export default function AppPage() {
           className="hidden md:block"
         />
         <div className="flex flex-1 flex-col"> 
-            <SidebarInset className="flex-1 flex flex-col overflow-y-auto custom-scrollbar">
+            <SidebarInset className="flex-1 flex flex-col"> {/* Removed overflow-y-auto from here */}
               <HeaderControls 
                 onNewThread={clearAllStates} 
                 spaceName={currentSpace?.name} 
                 viewMode={viewMode}
                 onViewDetails={() => setViewMode('details')}
               />
-              <main className="flex-1 p-4 md:p-6 space-y-8">
+              <main className="flex-1 p-4 md:p-6 overflow-y-auto custom-scrollbar">
                 {viewMode === 'details' && (
-                  <>
+                  <div className="space-y-8">
                     <CaseDetailsForm onSubmit={handleFormSubmit} initialData={currentCaseDetails} isSubmitting={isMlLoading} />
                     <DocumentUploadPanel files={uploadedFiles} onFilesChange={setUploadedFiles} />
                     {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput)) && (
                       <MlPredictionOutput isLoading={isMlLoading} data={mlOutput} />
                     )}
-                  </>
+                  </div>
                 )}
                 {viewMode === 'chatActive' && (
-                  <div className="flex flex-col items-center justify-center h-full text-center py-10">
-                    <MessageSquareText size={56} className="text-muted-foreground mb-4" />
-                    <h2 className="text-xl font-semibold mb-2">Chat Active</h2>
-                    <p className="text-muted-foreground mb-6 max-w-md">
-                      The case details and predictions are hidden to give you a focused chat experience. 
-                      You can bring them back using the button in the header or below.
-                    </p>
-                    <Button onClick={() => setViewMode('details')} variant="outline" size="lg">
-                      <FileText size={18} className="mr-2" /> View Case Details & Predictions
-                    </Button>
+                  <div className="space-y-4">
+                    {chatMessages.map((msg) => (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          "flex items-end gap-2",
+                          msg.sender === 'user' ? 'justify-end' : 'justify-start'
+                        )}
+                      >
+                        {msg.sender === 'bot' && (
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback><Bot className="h-5 w-5 text-accent" /></AvatarFallback>
+                          </Avatar>
+                        )}
+                        <div
+                          className={cn(
+                            "max-w-[70%] rounded-xl px-4 py-2 text-sm shadow-md",
+                            msg.sender === 'user'
+                              ? 'bg-secondary text-secondary-foreground rounded-br-none'
+                              : 'bg-accent text-accent-foreground rounded-bl-none'
+                          )}
+                        >
+                          {msg.text}
+                        </div>
+                        {msg.sender === 'user' && (
+                           <Avatar className="h-8 w-8">
+                            <AvatarFallback><User className="h-5 w-5 text-primary" /></AvatarFallback>
+                          </Avatar>
+                        )}
+                      </div>
+                    ))}
+                    {isBotReplying && chatMessages.length > 0 && chatMessages[chatMessages.length-1].sender === 'user' && (
+                       <div className="flex items-end gap-2 justify-start">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback><Bot className="h-5 w-5 text-accent" /></AvatarFallback>
+                          </Avatar>
+                          <div className="max-w-[70%] rounded-xl px-4 py-2 text-sm shadow-md bg-accent text-accent-foreground rounded-bl-none">
+                              <div className="flex items-center space-x-1">
+                                  <span className="h-2 w-2 bg-accent-foreground rounded-full animate-pulse delay-75"></span>
+                                  <span className="h-2 w-2 bg-accent-foreground rounded-full animate-pulse delay-150"></span>
+                                  <span className="h-2 w-2 bg-accent-foreground rounded-full animate-pulse delay-300"></span>
+                              </div>
+                          </div>
+                      </div>
+                    )}
+                    <div ref={messagesEndRef} />
                   </div>
                 )}
               </main>
+              {/* Chat Input Area - always visible at the bottom of SidebarInset */}
+              <div className="p-4 border-t bg-background">
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Ask a question..."
+                    value={chatInputText}
+                    onChange={(e) => setChatInputText(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !isBotReplying && handleSendMessage(chatInputText)}
+                    disabled={isBotReplying}
+                    className="flex-1"
+                  />
+                  <Button onClick={() => handleSendMessage(chatInputText)} disabled={!chatInputText.trim() || isBotReplying} className="bg-accent text-accent-foreground hover:bg-accent/90 px-3">
+                    <SendHorizonal className="h-5 w-5" />
+                  </Button>
+                </div>
+              </div>
             </SidebarInset>
         </div>
-        <aside className="hidden lg:flex flex-col w-[380px] xl:w-[420px] border-l bg-card h-screen sticky top-0">
-          <div className="flex-1 min-h-0">
-            <ChatbotWidget messages={chatMessages} onSendMessage={handleSendMessage} isSending={isBotReplying} />
-          </div>
-          <div className="h-[40%] border-t min-h-0">
-            <ChatHistory history={chatHistory} onClearHistory={handleClearChatHistory} />
-          </div>
-        </aside>
-
-        <div className="lg:hidden fixed bottom-6 right-6 z-50">
-          <Sheet open={isChatSheetOpen} onOpenChange={setIsChatSheetOpen}>
-            <SheetTrigger asChild>
-              <Button size="icon" className="rounded-full w-14 h-14 shadow-xl bg-accent hover:bg-accent/90">
-                <MessageSquareText className="h-6 w-6 text-accent-foreground" />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="right" className="w-full max-w-md p-0 flex flex-col">
-                <SheetHeader className="p-4 border-b flex flex-row justify-between items-center space-y-0">
-                    <SheetTitle className="font-headline text-lg font-semibold">Chat & History</SheetTitle>
-                    <SheetClose asChild>
-                        <Button variant="ghost" size="icon"><X className="h-5 w-5"/></Button>
-                    </SheetClose>
-                </SheetHeader>
-              <div className="flex-1 min-h-0">
-                <ChatbotWidget messages={chatMessages} onSendMessage={handleSendMessage} isSending={isBotReplying} />
-              </div>
-              <div className="h-[40%] border-t min-h-0">
-                <ChatHistory history={chatHistory} onClearHistory={handleClearChatHistory} />
-              </div>
-            </SheetContent>
-          </Sheet>
-        </div>
+        {/* Removed the right aside chat panel and the mobile Sheet for chat */}
       </div>
     </SidebarProvider>
   );
 }
+
+    
