@@ -118,8 +118,8 @@ export default function AppPage() {
       const dummyMlOutput: MlOutputData = {
         estimatedCost: `$${(Math.random() * 100000 + 5000).toFixed(0)}`,
         expectedDuration: `${Math.floor(Math.random() * 12) + 1} months / ${Math.floor(Math.random() * 20) + 1} days`,
-        weakPoints: weakPointsResult.weakPointsSummary.split('\n').map(s => s.trim()).filter(Boolean) as any, // This is string, will be parsed in component
-        powerpointOutline: powerpointResult.powerpointOutline, // This is string, will be parsed in component
+        weakPoints: weakPointsResult.weakPointsSummary, // Assign the raw string
+        powerpointOutline: powerpointResult.powerpointOutline, 
         winLossProbability: Math.floor(Math.random() * 60) + 40, // 40-99%
       };
       setMlOutput(dummyMlOutput);

@@ -55,13 +55,13 @@ export function MlPredictionOutput({ isLoading, data }: MlPredictionOutputProps)
 
   // Helper to parse string lists (bullet points or numbered)
   const parseListString = (listString: string): string[] => {
-    if (!listString) return [];
+    if (!listString || typeof listString !== 'string') return []; // Added type check for safety
     return listString.split(/\n(?=\s*[-*]|\s*\d+\.\s*)/) // Split by newlines followed by list markers
       .map(item => item.trim().replace(/^[-*]|\d+\.\s*/, '').trim()) // Remove list markers
       .filter(item => item.length > 0);
   };
 
-  const weakPointsList = parseListString(data.weakPoints as unknown as string); // AI returns string
+  const weakPointsList = parseListString(data.weakPoints); 
   const powerpointOutlineList = parseListString(data.powerpointOutline);
 
   return (
