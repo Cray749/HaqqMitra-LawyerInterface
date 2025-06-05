@@ -32,7 +32,7 @@ export function SpaceSidebar({
   selectedSpaceId,
   onAddSpace,
   onSelectSpace,
-  className, // className is effectively not used by Sidebar itself when floating, but kept for interface consistency
+  className, 
 }: SpaceSidebarProps) {
   const [isAddSpaceModalOpen, setIsAddSpaceModalOpen] = React.useState(false);
   const [newSpaceName, setNewSpaceName] = React.useState('');
@@ -49,14 +49,12 @@ export function SpaceSidebar({
     <>
       <Sidebar 
         side="left" 
-        variant="floating" 
-        collapsible="offcanvas" 
-        className={className} // Pass className, though Sidebar component might override/ignore some aspects with floating
+        variant="sidebar" // Changed from "floating" to "sidebar" (or remove for default)
+        collapsible="icon" // Changed from "offcanvas" to "icon"
+        className={className} 
       >
         <SidebarHeader className="p-4 justify-between items-center">
           <h2 className="font-headline text-xl font-semibold group-data-[collapsible=icon]:hidden">Spaces</h2>
-          {/* This trigger is primarily for mobile sheet view to close it, 
-              or if the sidebar had internal collapse states beyond offcanvas */}
           <div className="md:hidden"> 
              <SidebarTrigger />
           </div>
@@ -73,8 +71,6 @@ export function SpaceSidebar({
                 >
                   <div className="flex items-center gap-2">
                     <LayoutDashboard />
-                    {/* Text is hidden by parent group-data when collapsed to icon, 
-                        but offcanvas hides the whole sidebar so this specific rule has less effect */}
                     <span className="group-data-[collapsible=icon]:hidden">{space.name}</span>
                   </div>
                   <ChevronRight className="h-4 w-4 group-data-[collapsible=icon]:hidden" />
