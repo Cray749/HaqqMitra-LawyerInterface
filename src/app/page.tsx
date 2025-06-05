@@ -16,7 +16,7 @@ import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage, ChatH
 import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetClose, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { MessageSquareText, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { generatePowerpointOutline, GeneratePowerpointOutlineInput } from '@/ai/flows/generate-powerpoint-outline';
@@ -209,12 +209,12 @@ export default function AppPage() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-full max-w-md p-0 flex flex-col">
-                <div className="p-4 border-b flex justify-between items-center">
-                    <h3 className="font-headline text-lg font-semibold">Chat & History</h3>
+                <SheetHeader className="p-4 border-b flex flex-row justify-between items-center space-y-0">
+                    <SheetTitle className="font-headline text-lg font-semibold">Chat & History</SheetTitle>
                     <SheetClose asChild>
                         <Button variant="ghost" size="icon"><X className="h-5 w-5"/></Button>
                     </SheetClose>
-                </div>
+                </SheetHeader>
               <div className="flex-1 min-h-0">
                 <ChatbotWidget messages={chatMessages} onSendMessage={handleSendMessage} isSending={isBotReplying} />
               </div>
