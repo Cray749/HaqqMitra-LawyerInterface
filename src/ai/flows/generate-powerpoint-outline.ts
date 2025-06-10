@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -31,9 +32,8 @@ export type GeneratePowerpointOutlineInput = z.infer<
 
 const GeneratePowerpointOutlineOutputSchema = z.object({
   powerpointOutline: z.string().describe('The generated PowerPoint outline for the case.'),
-  // Future: Add citations and search_results if needed
-  // citations: z.array(z.any()).optional().describe('Citations from Perplexity.'),
-  // searchResults: z.array(z.any()).optional().describe('Search results from Perplexity.'),
+  citations: z.array(z.any()).optional().describe('Citations from Perplexity.'),
+  searchResults: z.array(z.any()).optional().describe('Search results from Perplexity.'),
 });
 export type GeneratePowerpointOutlineOutput = z.infer<
   typeof GeneratePowerpointOutlineOutputSchema
@@ -46,7 +46,7 @@ export async function generatePowerpointOutline(
 }
 
 const PERPLEXITY_API_URL = 'https://api.perplexity.ai/chat/completions';
-const PERPLEXITY_MODEL = 'sonar-medium-online';
+const PERPLEXITY_MODEL = 'sonar-pro'; // Corrected model name
 
 const generatePowerpointOutlineFlow = ai.defineFlow(
   {
@@ -58,7 +58,7 @@ const generatePowerpointOutlineFlow = ai.defineFlow(
     const apiKey = process.env.PERPLEXITY_API_KEY;
     if (!apiKey) {
       console.error('PERPLEXITY_API_KEY is not set.');
-      throw new Error('PERPLEXITY_API_KEY is not set.');
+      throw new Error('PERPLEXITY_API_KEY is not set. Please set it in your .env.local file.');
     }
 
     const systemPrompt = `You are an expert legal assistant tasked with generating a PowerPoint outline for a case.
@@ -84,7 +84,7 @@ Brief Description: ${input.briefDescription}
 Key Dates: ${input.keyDates}`;
 
     if (input.uploadedDocuments && input.uploadedDocuments.length > 0) {
-      userPromptContent += "\n\nUploaded Documents Overview:";
+      userPromptContent += "\n\nUploaded Documents Overview (content from data URIs):";
       input.uploadedDocuments.forEach(docDataUri => {
         try {
           const commaIndex = docDataUri.indexOf(',');
@@ -92,15 +92,19 @@ Key Dates: ${input.keyDates}`;
             userPromptContent += `\n- Document (format error: no comma in data URI)`;
             return;
           }
-          const meta = docDataUri.substring(0, commaIndex);
+          const meta = docDataUri.substring(0, commaIndex); // e.g. data:text/plain;base64
           const data = docDataUri.substring(commaIndex + 1);
-          let docInfo = "Document reference (content not shown in prompt or unable to extract text).";
+          let docInfo = "Document reference (unable to extract text or not a text file).";
 
-          if (meta.includes('text/plain')) {
+          // Attempt to decode text content if it's a known text type
+          if (meta.includes('text/plain') || meta.includes('application/json') || meta.includes('text/html') || meta.includes('text/csv')) {
             const textContent = Buffer.from(data, 'base64').toString('utf-8');
-            docInfo = `Text Document Snippet: ${textContent.substring(0, 250)}${textContent.length > 250 ? '...' : ''}`;
+            // Include a snippet of the text content. Be mindful of token limits for the API.
+            docInfo = `Text Document Snippet: ${textContent.substring(0, 500)}${textContent.length > 500 ? '...' : ''}`;
           } else if (meta.includes('application/pdf')) {
-            docInfo = `PDF Document named in upload (content not directly included in this prompt). Refer to it if relevant for arguments.`;
+             // For PDFs, we can't easily extract text here without a library.
+             // The prompt should instruct the model that a PDF was uploaded and it might be relevant.
+            docInfo = `PDF Document named in upload (content not directly included in this prompt, but consider its relevance for arguments).`;
           } else if (meta.includes('image/')) {
             docInfo = `Image Document named in upload (visual content not processable by this text model).`;
           }
@@ -115,6 +119,7 @@ Key Dates: ${input.keyDates}`;
       userPromptContent += "\n\nNo documents uploaded.";
     }
     userPromptContent += "\n\nPlease generate the PowerPoint outline based on all the above information.";
+
 
     const messages = [
       { role: 'system', content: systemPrompt },
@@ -131,6 +136,8 @@ Key Dates: ${input.keyDates}`;
         body: JSON.stringify({
           model: PERPLEXITY_MODEL,
           messages: messages,
+          // You can add other Perplexity-specific parameters here if needed
+          // e.g., return_citations, return_search_results
         }),
       });
 
@@ -143,17 +150,22 @@ Key Dates: ${input.keyDates}`;
       const responseData = await response.json();
       const powerpointOutline = responseData.choices[0]?.message?.content || "Could not generate PowerPoint outline.";
       
-      // TODO: Extract citations and search_results if needed
-      // const citations = responseData.choices[0]?.message?.citations;
-      // const searchResults = responseData.choices[0]?.search_results;
+      const citations = responseData.choices[0]?.message?.citations;
+      const searchResults = responseData.choices[0]?.search_results;
 
       return {
         powerpointOutline,
+        citations: citations,
+        searchResults: searchResults,
       };
 
     } catch (error) {
-      console.error('Error calling Perplexity API or processing response:', error);
-      throw error; // Re-throw to be caught by caller
+      console.error('Error calling Perplexity API or processing response in generatePowerpointOutlineFlow:', error);
+      // Re-throw or handle as appropriate for your application
+      if (error instanceof Error) {
+        throw new Error(`Failed to generate PowerPoint outline: ${error.message}`);
+      }
+      throw new Error('An unknown error occurred while generating the PowerPoint outline.');
     }
   }
 );
