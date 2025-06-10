@@ -8,12 +8,13 @@ import {
   CaseDetailsForm,
   DocumentUploadPanel,
   MlPredictionOutput,
+  DetailedCostRoadmap // Added import
 } from '@/components/app';
-import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData } from '@/types';
+import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData, DetailedCostRoadmapOutput } from '@/types'; // Added DetailedCostRoadmapOutput
 import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2, Swords, Scale, LogOut } from 'lucide-react';
+import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2, Swords, Scale, LogOut, Briefcase, IndianRupee } from 'lucide-react'; // Added Briefcase, IndianRupee
 import { useToast } from '@/hooks/use-toast';
 import {
   generateCaseAnalysis,
@@ -24,6 +25,8 @@ import {
   GenerateStrategySnapshotInput,
   generateDevilsAdvocateResponse,
   GenerateDevilsAdvocateResponseInput,
+  generateDetailedCostRoadmap, // Added import
+  GenerateDetailedCostRoadmapInput, // Added import
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
@@ -62,6 +65,10 @@ function AppLayoutContent() {
 
   const [strategySnapshot, setStrategySnapshot] = React.useState<StrategySnapshotData | null>(null);
   const [isStrategyLoading, setIsStrategyLoading] = React.useState(false);
+
+  const [detailedCostRoadmap, setDetailedCostRoadmap] = React.useState<DetailedCostRoadmapOutput | null>(null); // New state
+  const [isDetailedCostRoadmapLoading, setIsDetailedCostRoadmapLoading] = React.useState(false); // New state
+
 
   const [chatMessages, setChatMessages] = React.useState<AppChatMessage[]>([]);
   const [isBotReplying, setIsBotReplying] = React.useState(false);
@@ -111,6 +118,7 @@ function AppLayoutContent() {
             setUploadedFiles(detailedCase.files || []);
             setMlOutput(null);
             setStrategySnapshot(null);
+            setDetailedCostRoadmap(null); // Reset detailed cost roadmap
 
             const messages = await getChatMessages(activeCaseId);
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
@@ -171,6 +179,7 @@ function AppLayoutContent() {
   const handleSelectCase = (id: string) => {
     if (id !== activeCaseId) {
        setActiveCaseId(id);
+       setDetailedCostRoadmap(null); // Clear roadmap when switching cases
     }
   };
 
@@ -183,8 +192,10 @@ function AppLayoutContent() {
     setUploadedFiles([]);
     setMlOutput(null);
     setStrategySnapshot(null);
+    setDetailedCostRoadmap(null);
     setIsMlLoading(false);
     setIsStrategyLoading(false);
+    setIsDetailedCostRoadmapLoading(false);
     setChatMessages([]);
     setChatInputText('');
     setDevilsAdvocateMessages([]);
@@ -209,12 +220,14 @@ function AppLayoutContent() {
       if (!data.enableMlPrediction) {
         setMlOutput(null);
         setStrategySnapshot(null);
+        setDetailedCostRoadmap(null); // Also clear roadmap if ML is disabled
         return;
       }
 
       setIsMlLoading(true);
       setMlOutput(null);
-      setStrategySnapshot(null); // Also clear strategy snapshot if base ML is re-run
+      setStrategySnapshot(null); 
+      setDetailedCostRoadmap(null); // Also clear strategy snapshot and roadmap if base ML is re-run
 
       const caseAnalysisInput: GenerateCaseAnalysisInput = {
         caseDetails: JSON.stringify(data),
@@ -271,6 +284,41 @@ function AppLayoutContent() {
     }
   };
 
+  const handleGenerateDetailedCostRoadmap = async () => {
+    if (!activeCaseId || !currentCaseDetails) {
+      toast({ title: "Missing Data", description: "Please ensure a case is active and details are filled.", variant: "destructive"});
+      return;
+    }
+     if (!currentCaseDetails.enableMlPrediction) {
+      toast({ title: "ML Disabled", description: "Please enable ML Prediction in Case Details to generate cost roadmap.", variant: "default"});
+      return;
+    }
+
+    setIsDetailedCostRoadmapLoading(true);
+    setDetailedCostRoadmap(null);
+    try {
+      const roadmapInput: GenerateDetailedCostRoadmapInput = {
+        caseDetails: JSON.stringify(currentCaseDetails),
+        uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name),
+      };
+      const result = await generateDetailedCostRoadmap(roadmapInput);
+      setDetailedCostRoadmap(result);
+      if (result.error) {
+        toast({ title: "Cost Roadmap Error", description: result.error, variant: "destructive" });
+      } else {
+        toast({ title: "Detailed Cost Roadmap Generated", description: "AI-powered cost breakdown by stage is now available." });
+      }
+    } catch (error) {
+      console.error("Error generating detailed cost roadmap:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate detailed cost roadmap.";
+      toast({ title: "Roadmap Generation Failed", description: errorMessage, variant: "destructive"});
+      setDetailedCostRoadmap({ stages: [], error: errorMessage });
+    } finally {
+      setIsDetailedCostRoadmapLoading(false);
+    }
+  };
+
+
   const handleOpenAddCaseModal = () => {
     setIsAddCaseModalOpen(true);
   };
@@ -325,7 +373,6 @@ function AppLayoutContent() {
 
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
-    // setViewMode('chatActive'); // No longer automatically switch view mode here, user is already in chatActive
     setChatInputText('');
 
     try {
@@ -390,9 +437,9 @@ function AppLayoutContent() {
 
   const handleToggleNormalChat = () => {
     if (isDevilsAdvocateModeActive) {
-      handleEndDevilsAdvocateMode(); // Gracefully end DA mode
+      handleEndDevilsAdvocateMode(); 
     }
-    setViewMode('chatActive'); // Then switch to normal chat
+    setViewMode('chatActive'); 
   };
 
   const handleSendDevilsAdvocateMessage = async (text: string) => {
@@ -523,6 +570,40 @@ function AppLayoutContent() {
                       caseActive={!!activeCaseId && !!currentCaseDetails}
                     />
                   )}
+                  {/* Detailed Cost Roadmap Section */}
+                  {activeCaseId && currentCaseDetails.enableMlPrediction && (
+                    <Card className="shadow-xl border-primary/30">
+                      <CardHeader>
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                            <div>
+                                <CardTitle className="font-headline text-2xl text-primary flex items-center">
+                                    <IndianRupee className="mr-3 h-7 w-7"/> Detailed Cost & Stage Roadmap (INR)
+                                </CardTitle>
+                                <CardDescription>AI-generated cost breakdown by case stage.</CardDescription>
+                            </div>
+                            <Button 
+                                onClick={handleGenerateDetailedCostRoadmap} 
+                                disabled={isDetailedCostRoadmapLoading || !activeCaseId}
+                                className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md whitespace-nowrap mt-2 sm:mt-0"
+                                size="lg"
+                            >
+                              {isDetailedCostRoadmapLoading ? (
+                                <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Generating Costs...</>
+                              ) : (
+                                <><Briefcase className="mr-2 h-5 w-5" /> Generate Detailed Costs</>
+                              )}
+                            </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <DetailedCostRoadmap 
+                          roadmapData={detailedCostRoadmap}
+                          isLoading={isDetailedCostRoadmapLoading}
+                        />
+                      </CardContent>
+                    </Card>
+                  )}
+
                   {activeCaseId && !isDevilsAdvocateModeActive && (
                     <Card className="shadow-xl border-destructive/30">
                       <CardHeader>

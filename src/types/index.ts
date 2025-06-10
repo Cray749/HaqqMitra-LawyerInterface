@@ -57,13 +57,12 @@ export interface MlOutputData { // Basic analysis results
   expectedDuration: string;
   winProbability: number; 
   lossProbability: number; 
-  // strongPoints and weakPoints are handled by StrategySnapshotData now for display
 }
 
 export interface StrategySnapshotData {
   openingStatementHook: string;
-  topStrengths: string; // Expected as a bulleted list string from AI
-  topWeaknesses: string; // Expected as a bulleted list string from AI
+  topStrengths: string; 
+  topWeaknesses: string; 
   citations?: any[];
   searchResults?: any[];
 }
@@ -84,4 +83,19 @@ export interface ChatHistoryItem {
   preview: string;
   question: string;
   answer: string;
+}
+
+// New types for Detailed Cost Roadmap
+export interface CaseStageCost {
+  id: string; // For React key, can be generated client-side
+  stageName: string;
+  description: string;
+  estimatedCostINR: string; // e.g., "₹10,000 - ₹15,000" or "Approx. ₹20,000"
+}
+
+export interface DetailedCostRoadmapOutput {
+  stages: CaseStageCost[];
+  citations?: any[];
+  searchResults?: any[];
+  error?: string; // To communicate AI parsing/generation errors
 }

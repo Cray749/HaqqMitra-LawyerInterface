@@ -7,4 +7,5 @@ import '@/ai/flows/generate-powerpoint-outline.ts';
 import '@/ai/flows/generate-chatbot-response.ts';
 import '@/ai/flows/generate-case-analysis.ts'; 
 import '@/ai/flows/generate-strategy-snapshot.ts';
-import '@/ai/flows/generate-devils-advocate-response.ts'; // Added import for devil's advocate flow
+import '@/ai/flows/generate-devils-advocate-response.ts';
+import '@/ai/flows/generate-detailed-cost-roadmap.ts'; // Added import for detailed cost roadmap flow
