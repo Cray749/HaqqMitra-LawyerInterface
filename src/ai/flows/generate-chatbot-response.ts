@@ -77,7 +77,11 @@ Be polite and professional.`;
 
     // Add existing chat history
     input.chatHistory.forEach(histMsg => {
-        messages.push({role: histMsg.role, content: histMsg.content});
+        const lastMessage = messages[messages.length - 1];
+        // Only add history messages that maintain the alternating user/assistant pattern
+        if (lastMessage && lastMessage.role !== histMsg.role) {
+            messages.push({role: histMsg.role, content: histMsg.content});
+        }
     });
     
     // Add current user message with context

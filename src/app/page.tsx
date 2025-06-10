@@ -52,7 +52,7 @@ function AppLayoutContent() {
   const { setOpen: setSidebarOpen } = useSidebar();
   const isMobile = useIsMobile();
 
-  const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null);
+  const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null); // Renamed from activeSpaceId
   const [cases, setCases] = React.useState<Space[]>([]);
   
   const [currentCaseDetails, setCurrentCaseDetails] = React.useState<CaseDetails>(initialCaseDetails);
@@ -81,7 +81,6 @@ function AppLayoutContent() {
         if (fetchedCases.length > 0 && !activeCaseId) {
           setActiveCaseId(fetchedCases[0].id);
         } else if (fetchedCases.length === 0) {
-          // If no cases, open modal to add one
           setIsAddCaseModalOpen(true);
         }
       } catch (error) {
@@ -90,7 +89,7 @@ function AppLayoutContent() {
       }
     };
     loadCases();
-  }, [toast]); // Removed activeCaseId to prevent re-triggering on case selection if cases list changes
+  }, [toast]); 
 
   // Load case details, files, and chat when activeCaseId changes
   React.useEffect(() => {
@@ -99,18 +98,15 @@ function AppLayoutContent() {
         try {
           const caseData = cases.find(c => c.id === activeCaseId);
           if (caseData) {
-            // Simulate fetching detailed case data if it's not fully loaded
-            // For now, we assume 'caseData.details' might be populated or needs fetching
-            // This part would involve calling `getCase(activeCaseId)` if details aren't in the list summary
-            const detailedCase = await createCaseService(caseData.name, caseData.id); // This also fetches if exists
+            const detailedCase = await createCaseService(caseData.name, caseData.id); 
             
             setCurrentCaseDetails(detailedCase.details || initialCaseDetails);
             setUploadedFiles(detailedCase.files || []);
-            setMlOutput(null); // Clear previous ML output
+            setMlOutput(null); 
             
             const messages = await getChatMessages(activeCaseId);
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
-            setViewMode('details'); // Reset to details view
+            setViewMode('details'); 
           }
         } catch (error) {
           console.error(`Failed to load data for case ${activeCaseId}:`, error);
@@ -119,11 +115,10 @@ function AppLayoutContent() {
       };
       loadCaseData();
     } else {
-      // No active case, reset relevant states
-      clearAllStates(false); // Don't show toast if it's initial load without cases
+      clearAllStates(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCaseId, toast]); // cases removed to prevent loop if getCases returns new objects
+  }, [activeCaseId, toast]); 
 
   React.useEffect(() => {
     if (viewMode === 'chatActive' && messagesEndRef.current) {
@@ -149,10 +144,9 @@ function AppLayoutContent() {
     }
   };
 
-  const handleSelectCase = (id: string) => {
+  const handleSelectCase = (id: string) => { // Renamed from handleSelectSpace
     if (id !== activeCaseId) {
        setActiveCaseId(id);
-       // Data loading for the selected case is handled by the useEffect hook watching activeCaseId
     }
     if (isMobile) {
       setSidebarOpen(false);
@@ -171,7 +165,7 @@ function AppLayoutContent() {
     setChatMessages([]);
     setChatInputText('');
     setViewMode('details'); 
-    if (showToast && activeCaseId) { // Only toast if there's an active case context being cleared
+    if (showToast && activeCaseId) { 
       toast({ title: "Inputs Cleared", description: "Form inputs and ML outputs for the current case have been reset."});
     }
   };
@@ -181,38 +175,32 @@ function AppLayoutContent() {
       toast({ title: "No Active Case", description: "Please select or create a case first.", variant: "destructive" });
       return;
     }
-    setCurrentCaseDetails(data); // ensure UI reflects submitted data immediately
+    setCurrentCaseDetails(data); 
     try {
       await updateCaseDetailsService(activeCaseId, data);
       toast({ title: "Case Updated", description: "Case details have been saved." });
 
       if (!data.enableMlPrediction) {
-        setMlOutput(null); // Clear ML output if disabled
+        setMlOutput(null); 
         return;
       }
 
       setIsMlLoading(true);
       setMlOutput(null);
 
-      // Generate Weak Points Summary
       const weakPointsInput: GenerateWeakPointsSummaryInput = {
         caseDetails: JSON.stringify(data),
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name),
       };
       const weakPointsResult = await generateWeakPointsSummary(weakPointsInput);
-
-      // TODO: Integrate PowerPoint Outline Generation if desired upon form submit
-      // const pptInput: GeneratePowerpointOutlineInput = {...};
-      // const pptResult = await generatePowerpointOutline(pptInput);
       
       const generatedMlOutput: MlOutputData = {
-        estimatedCost: `$${(Math.random() * 100000 + 5000).toFixed(0)}`, // Keep dummy for now
-        expectedDuration: `${Math.floor(Math.random() * 12) + 1} months / ${Math.floor(Math.random() * 20) + 1} days`, // Keep dummy
+        estimatedCost: `$${(Math.random() * 100000 + 5000).toFixed(0)}`, 
+        expectedDuration: `${Math.floor(Math.random() * 12) + 1} months / ${Math.floor(Math.random() * 20) + 1} days`, 
         strongPoints: weakPointsResult.strongPointsSummary,
         weakPoints: weakPointsResult.weakPointsSummary,
-        // powerpointOutline: pptResult.powerpointOutline, // If integrating PPT
-        winProbability: Math.floor(Math.random() * 50) + 45, // Keep dummy
-        lossProbability: Math.floor(Math.random() * 50) + 5, // Keep dummy
+        winProbability: Math.floor(Math.random() * 50) + 45, 
+        lossProbability: Math.floor(Math.random() * 50) + 5, 
       };
       setMlOutput(generatedMlOutput);
       toast({ title: "Prediction Complete", description: "ML analysis results are now available."});
@@ -226,19 +214,10 @@ function AppLayoutContent() {
     }
   };
 
-  const handleNewThread = () => {
-    if (!activeCaseId) {
-       toast({ title: "No Active Case", description: "Please select or create a case to start a new thread.", variant: "destructive" });
-       return;
-    }
-    // Clear local state for the current view
-    clearAllStates(true);
-    // Optionally clear server-side chat history for this case ID
-    // clearChatHistoryService(activeCaseId).then(() => {
-    //   toast({ title: "Chat History Cleared", description: "Server chat history for this case is cleared." });
-    // }).catch(err => {
-    //   toast({ title: "History Clear Failed", description: "Could not clear server chat history.", variant: "destructive"});
-    // });
+  const handleOpenAddCaseModal = () => { // Renamed from handleNewThread
+    setIsAddCaseModalOpen(true);
+    // The original clearAllStates() is removed as "New Case" now means creating one.
+    // If a separate "clear form" is needed, it would be a different button.
   };
 
   const handleFilesChange = async (newFiles: UploadedFile[]) => {
@@ -246,7 +225,6 @@ function AppLayoutContent() {
       toast({ title: "No Active Case", description: "Please select a case before uploading files.", variant: "destructive"});
       return;
     }
-    // Determine added and removed files for server-side sync
     const oldFileIds = new Set(uploadedFiles.map(f => f.id));
     const newFileIds = new Set(newFiles.map(f => f.id));
 
@@ -255,19 +233,18 @@ function AppLayoutContent() {
 
     try {
       for (const file of filesToAdd) {
-        if (file.dataUrl) { // Ensure dataUrl is present
+        if (file.dataUrl) { 
           await uploadFileToCaseService(activeCaseId, file.id, file.name, file.type, file.size, file.dataUrl);
         }
       }
       for (const fileId of filesToRemoveIds) {
         await removeFileFromCaseService(activeCaseId, fileId);
       }
-      setUploadedFiles(newFiles); // Update local state after successful server operations
+      setUploadedFiles(newFiles); 
       toast({ title: "Files Updated", description: "Document list has been synchronized."});
     } catch (error) {
       console.error("Error updating files:", error);
       toast({ title: "File Update Failed", description: "Could not sync all file changes.", variant: "destructive"});
-      // Potentially revert local state or re-fetch from server if sync fails critically
     }
   };
   
@@ -286,14 +263,11 @@ function AppLayoutContent() {
       caseId: activeCaseId,
     };
     
-    // Prepare chat history for AI *before* adding current user message to local state
-    // This ensures `chatMessages` reflects the history prior to the current input.
     const historyForApi = chatMessages.map(msg => ({
       role: msg.sender === 'user' ? 'user' : 'assistant',
       content: msg.text
     }));
-    
-    // Now update UI and state with the new user message
+        
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
     setViewMode('chatActive'); 
@@ -303,8 +277,8 @@ function AppLayoutContent() {
       await saveChatMessage(activeCaseId, userMessage);
 
       const chatbotInput: GenerateChatbotResponseInput = {
-        userMessage: text, // Current user's message text
-        chatHistory: historyForApi, // History *before* the current user's message
+        userMessage: text, 
+        chatHistory: historyForApi, 
         caseDetails: JSON.stringify(currentCaseDetails),
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
       };
@@ -345,15 +319,15 @@ function AppLayoutContent() {
     <>
     <div className="flex min-h-screen bg-background">
       <SpaceSidebar
-        spaces={cases.map(c => ({id: c.id, name: c.name}))} // Pass simplified spaces
-        selectedSpaceId={activeCaseId}
-        onAddSpace={() => setIsAddCaseModalOpen(true)}
-        onSelectSpace={handleSelectCase}
+        caseItems={cases.map(c => ({id: c.id, name: c.name}))} 
+        selectedCaseId={activeCaseId}
+        onTriggerAddCase={() => setIsAddCaseModalOpen(true)}
+        onSelectCase={handleSelectCase}
       />
       <div className="flex flex-1 flex-col"> 
           <SidebarInset className="flex-1 flex flex-col">
             <HeaderControls 
-              onNewThread={handleNewThread} 
+              onAddNewCase={handleOpenAddCaseModal} 
               spaceName={currentCase?.name} 
               viewMode={viewMode}
               onViewDetails={() => setViewMode('details')}
@@ -363,14 +337,13 @@ function AppLayoutContent() {
               {viewMode === 'details' && (
                 <div className="space-y-8">
                   <CaseDetailsForm 
-                    key={activeCaseId} // Ensure form re-initializes when case changes
+                    key={activeCaseId} 
                     onSubmit={handleFormSubmit} 
                     initialData={currentCaseDetails} 
                     isSubmitting={isMlLoading}
-                    // onValuesChange={handleCaseDetailsChange} // Removed as direct RHF watch is not implemented yet
                   />
                   <DocumentUploadPanel 
-                    key={`docs-${activeCaseId}`} // Ensure panel re-initializes for new case
+                    key={`docs-${activeCaseId}`} 
                     files={uploadedFiles} 
                     onFilesChange={handleFilesChange} 
                   />
@@ -411,7 +384,7 @@ function AppLayoutContent() {
                       )}
                     </div>
                   ))}
-                  {isBotReplying && chatMessages.length > 0 && chatMessages[chatMessages.length-1].sender === 'user' && (
+                  {isBotReplyimg && chatMessages.length > 0 && chatMessages[chatMessages.length-1].sender === 'user' && (
                      <div className="flex items-end gap-2 justify-start">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback><Bot className="h-5 w-5 text-accent" /></AvatarFallback>
@@ -456,7 +429,7 @@ function AppLayoutContent() {
 
     <Dialog open={isAddCaseModalOpen} onOpenChange={(isOpen) => {
         setIsAddCaseModalOpen(isOpen);
-        if (!isOpen) setNewCaseNameInput(''); // Clear input if modal is closed
+        if (!isOpen) setNewCaseNameInput(''); 
     }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -491,6 +464,3 @@ function AppLayoutContent() {
     </>
   );
 }
-
-
-    

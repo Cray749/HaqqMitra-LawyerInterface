@@ -1,11 +1,9 @@
 
 "use client";
 
-import type { Space } from '@/types';
+import type { Space } from '@/types'; // Space type can still be used if its structure fits "Case"
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+// Dialog related imports removed as modal is now handled by parent
 import {
   Sidebar,
   SidebarContent,
@@ -20,58 +18,48 @@ import { PlusCircle, LayoutDashboard, ChevronRight } from 'lucide-react';
 import * as React from 'react';
 
 interface SpaceSidebarProps {
-  spaces: Space[];
-  selectedSpaceId: string | null;
-  onAddSpace: (name: string) => void;
-  onSelectSpace: (id: string) => void;
+  caseItems: Pick<Space, 'id' | 'name'>[]; // Renamed from spaces
+  selectedCaseId: string | null;      // Renamed from selectedSpaceId
+  onTriggerAddCase: () => void;        // Renamed from onAddSpace and changed signature
+  onSelectCase: (id: string) => void;   // Renamed from onSelectSpace
   className?: string;
 }
 
 export function SpaceSidebar({
-  spaces,
-  selectedSpaceId,
-  onAddSpace,
-  onSelectSpace,
+  caseItems,
+  selectedCaseId,
+  onTriggerAddCase,
+  onSelectCase,
   className, 
 }: SpaceSidebarProps) {
-  const [isAddSpaceModalOpen, setIsAddSpaceModalOpen] = React.useState(false);
-  const [newSpaceName, setNewSpaceName] = React.useState('');
-
-  const handleAddSpace = () => {
-    if (newSpaceName.trim()) {
-      onAddSpace(newSpaceName.trim());
-      setNewSpaceName('');
-      setIsAddSpaceModalOpen(false);
-    }
-  };
 
   return (
     <>
       <Sidebar 
         side="left" 
-        variant="sidebar" // Changed from "floating" to "sidebar" (or remove for default)
-        collapsible="icon" // Changed from "offcanvas" to "icon"
+        variant="sidebar"
+        collapsible="icon"
         className={className} 
       >
         <SidebarHeader className="p-4 justify-between items-center">
-          <h2 className="font-headline text-xl font-semibold group-data-[collapsible=icon]:hidden">Spaces</h2>
+          <h2 className="font-headline text-xl font-semibold group-data-[collapsible=icon]:hidden">Cases</h2> {/* Changed "Spaces" to "Cases" */}
           <div className="md:hidden"> 
              <SidebarTrigger />
           </div>
         </SidebarHeader>
         <SidebarContent className="p-2">
           <SidebarMenu>
-            {spaces.map((space) => (
-              <SidebarMenuItem key={space.id}>
+            {caseItems.map((caseItem) => (
+              <SidebarMenuItem key={caseItem.id}>
                 <SidebarMenuButton
-                  onClick={() => onSelectSpace(space.id)}
-                  isActive={selectedSpaceId === space.id}
+                  onClick={() => onSelectCase(caseItem.id)}
+                  isActive={selectedCaseId === caseItem.id}
                   className="justify-between group-data-[collapsible=icon]:justify-center"
-                  tooltip={space.name}
+                  tooltip={caseItem.name}
                 >
                   <div className="flex items-center gap-2">
                     <LayoutDashboard />
-                    <span className="group-data-[collapsible=icon]:hidden">{space.name}</span>
+                    <span className="group-data-[collapsible=icon]:hidden">{caseItem.name}</span>
                   </div>
                   <ChevronRight className="h-4 w-4 group-data-[collapsible=icon]:hidden" />
                 </SidebarMenuButton>
@@ -83,39 +71,14 @@ export function SpaceSidebar({
           <Button
             variant="ghost"
             className="w-full justify-start gap-2 group-data-[collapsible=icon]:justify-center hover:bg-accent hover:text-accent-foreground"
-            onClick={() => setIsAddSpaceModalOpen(true)}
+            onClick={onTriggerAddCase} // Changed to call onTriggerAddCase
           >
             <PlusCircle />
-            <span className="group-data-[collapsible=icon]:hidden">Add Space</span>
+            <span className="group-data-[collapsible=icon]:hidden">Add Case</span> {/* Changed "Add Space" to "Add Case" */}
           </Button>
         </SidebarFooter>
       </Sidebar>
-
-      <Dialog open={isAddSpaceModalOpen} onOpenChange={setIsAddSpaceModalOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="font-headline">Add New Space</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="spaceName" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="spaceName"
-                value={newSpaceName}
-                onChange={(e) => setNewSpaceName(e.target.value)}
-                className="col-span-3"
-                autoFocus
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddSpaceModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleAddSpace} className="bg-accent text-accent-foreground hover:bg-accent/90">Add Space</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Internal Dialog removed, will be handled by page.tsx */}
     </>
   );
 }

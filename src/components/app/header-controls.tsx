@@ -3,17 +3,17 @@
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { FilePlus2, PanelLeft, FileText } from 'lucide-react';
+import { PlusCircle, PanelLeft, FileText } from 'lucide-react'; // Changed FilePlus2 to PlusCircle
 import { useSidebar } from '@/components/ui/sidebar';
 
 interface HeaderControlsProps {
-  onNewThread: () => void;
-  spaceName?: string;
+  onAddNewCase: () => void; // Renamed from onNewThread
+  spaceName?: string; // Kept as spaceName as it refers to the active item's name
   viewMode: 'details' | 'chatActive';
   onViewDetails: () => void;
 }
 
-export function HeaderControls({ onNewThread, spaceName, viewMode, onViewDetails }: HeaderControlsProps) {
+export function HeaderControls({ onAddNewCase, spaceName, viewMode, onViewDetails }: HeaderControlsProps) {
   const { toggleSidebar } = useSidebar();
 
   return (
@@ -21,7 +21,6 @@ export function HeaderControls({ onNewThread, spaceName, viewMode, onViewDetails
        <Button
           variant="outline"
           size="icon"
-          // className="sm:hidden" // Removed sm:hidden to make it always visible
           onClick={toggleSidebar}
         >
           <PanelLeft className="h-5 w-5" />
@@ -49,12 +48,12 @@ export function HeaderControls({ onNewThread, spaceName, viewMode, onViewDetails
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button onClick={onNewThread} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                <FilePlus2 className="mr-2 h-4 w-4" /> New Thread
+              <Button onClick={onAddNewCase} className="bg-accent text-accent-foreground hover:bg-accent/90">
+                <PlusCircle className="mr-2 h-4 w-4" /> New Case 
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              <p>Start over with a fresh case.</p>
+              <p>Create a new case.</p>
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
