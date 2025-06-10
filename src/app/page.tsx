@@ -16,10 +16,8 @@ import { Button } from '@/components/ui/button';
 import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
-  generateWeakPointsSummary,
-  GenerateWeakPointsSummaryInput,
-  generatePowerpointOutline,
-  // GeneratePowerpointOutlineInput, // Not used directly in page.tsx
+  generateCaseAnalysis, // Changed from generateWeakPointsSummary
+  GenerateCaseAnalysisInput, // Changed
   generateChatbotResponse,
   GenerateChatbotResponseInput,
 } from '@/ai/flows';
@@ -52,7 +50,7 @@ function AppLayoutContent() {
   const { setOpen: setSidebarOpen } = useSidebar();
   const isMobile = useIsMobile();
 
-  const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null); // Renamed from activeSpaceId
+  const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null);
   const [cases, setCases] = React.useState<Space[]>([]);
   
   const [currentCaseDetails, setCurrentCaseDetails] = React.useState<CaseDetails>(initialCaseDetails);
@@ -99,18 +97,15 @@ function AppLayoutContent() {
         try {
           const caseData = cases.find(c => c.id === activeCaseId);
           if (caseData) {
-            // Attempt to "get" the case, which effectively creates it if it doesn't exist or fetches details
             const detailedCase = await createCaseService(caseData.name, caseData.id); 
             
             setCurrentCaseDetails(detailedCase.details || initialCaseDetails);
             setUploadedFiles(detailedCase.files || []);
-            setMlOutput(null); // Clear previous ML output when switching cases
+            setMlOutput(null); 
             
-            // Load chat messages for the active case
             const messages = await getChatMessages(activeCaseId);
-            // Ensure timestamp is a Date object
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
-            setViewMode('details'); // Default to details view when a case is loaded
+            setViewMode('details'); 
           }
         } catch (error) {
           console.error(`Failed to load data for case ${activeCaseId}:`, error);
@@ -119,11 +114,10 @@ function AppLayoutContent() {
       };
       loadCaseData();
     } else {
-      // If no case is active (e.g., all cases deleted), clear all states
-      clearAllStates(false); // Don't show toast if no active case to clear from
+      clearAllStates(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCaseId, toast]); // Removed `cases` from dependencies to avoid loop, createCaseService handles fetching
+  }, [activeCaseId, toast]); 
 
   React.useEffect(() => {
     if (viewMode === 'chatActive' && messagesEndRef.current) {
@@ -138,7 +132,6 @@ function AppLayoutContent() {
     }
     try {
       const newCase = await createCaseService(newCaseNameInput.trim());
-      // createCaseService now returns the full Space object, including details and files if they exist
       setCases(prev => [...prev, {id: newCase.id, name: newCase.name, details: newCase.details, files: newCase.files}]);
       setActiveCaseId(newCase.id);
       setNewCaseNameInput('');
@@ -150,10 +143,9 @@ function AppLayoutContent() {
     }
   };
 
-  const handleSelectCase = (id: string) => { // Renamed from handleSelectSpace
+  const handleSelectCase = (id: string) => {
     if (id !== activeCaseId) {
        setActiveCaseId(id);
-       // Data loading for the selected case is handled by the useEffect hook watching activeCaseId
     }
     if (isMobile) {
       setSidebarOpen(false);
@@ -164,18 +156,15 @@ function AppLayoutContent() {
     setCurrentCaseDetails(newDetails);
   };
 
-  // Clears data related to the *currently active* case.
   const clearAllStates = (showToast = true) => {
     setCurrentCaseDetails(initialCaseDetails);
     setUploadedFiles([]);
     setMlOutput(null);
     setIsMlLoading(false);
-    // Chat messages are case-specific, so they are reloaded when activeCaseId changes.
-    // Clearing them here might be redundant or could be done selectively.
     setChatMessages([]);
     setChatInputText('');
-    setViewMode('details'); // Reset view mode
-    if (showToast && activeCaseId) { // Only show toast if there was an active case being cleared
+    setViewMode('details'); 
+    if (showToast && activeCaseId) { 
       toast({ title: "Inputs Cleared", description: "Form inputs and ML outputs for the current case have been reset."});
     }
   };
@@ -185,51 +174,48 @@ function AppLayoutContent() {
       toast({ title: "No Active Case", description: "Please select or create a case first.", variant: "destructive" });
       return;
     }
-    setCurrentCaseDetails(data); // Optimistically update UI
+    setCurrentCaseDetails(data); 
     try {
       await updateCaseDetailsService(activeCaseId, data);
       toast({ title: "Case Updated", description: "Case details have been saved." });
 
       if (!data.enableMlPrediction) {
-        setMlOutput(null); // Clear ML output if prediction is disabled
+        setMlOutput(null); 
         return;
       }
 
       setIsMlLoading(true);
-      setMlOutput(null); // Clear previous output before new prediction
+      setMlOutput(null); 
 
-      const weakPointsInput: GenerateWeakPointsSummaryInput = {
+      const caseAnalysisInput: GenerateCaseAnalysisInput = {
         caseDetails: JSON.stringify(data),
-        // Ensure uploadedFiles are correctly mapped; use dataUrl if available, otherwise name as placeholder.
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name),
       };
-      const weakPointsResult = await generateWeakPointsSummary(weakPointsInput);
+      const analysisResult = await generateCaseAnalysis(caseAnalysisInput);
       
-      // Simulate other ML outputs or integrate real flows
       const generatedMlOutput: MlOutputData = {
-        estimatedCost: `$${(Math.random() * 100000 + 5000).toFixed(0)}`, // Simulated
-        expectedDuration: `${Math.floor(Math.random() * 12) + 1} months / ${Math.floor(Math.random() * 20) + 1} days`, // Simulated
-        strongPoints: weakPointsResult.strongPointsSummary,
-        weakPoints: weakPointsResult.weakPointsSummary,
-        winProbability: Math.floor(Math.random() * 50) + 45, // Simulated (45-95%)
-        lossProbability: Math.floor(Math.random() * 50) + 5, // Simulated (5-55%)
+        estimatedCost: analysisResult.estimatedCost,
+        expectedDuration: analysisResult.expectedDuration,
+        strongPoints: analysisResult.strongPointsSummary,
+        weakPoints: analysisResult.weakPointsSummary,
+        winProbability: analysisResult.winProbability,
+        lossProbability: analysisResult.lossProbability,
       };
       setMlOutput(generatedMlOutput);
-      toast({ title: "Prediction Complete", description: "ML analysis results are now available."});
+      toast({ title: "Prediction Complete", description: "AI analysis results are now available."});
 
     } catch (error) {
-      console.error("Error during case update or ML prediction:", error);
-      toast({ title: "Operation Failed", description: "An error occurred.", variant: "destructive"});
-      setMlOutput(null); // Ensure ML output is cleared on error
+      console.error("Error during case update or AI analysis:", error);
+      const errorMessage = error instanceof Error ? error.message : "An error occurred during AI analysis.";
+      toast({ title: "Operation Failed", description: errorMessage, variant: "destructive"});
+      setMlOutput(null); 
     } finally {
       setIsMlLoading(false);
     }
   };
 
-  const handleOpenAddCaseModal = () => { // Renamed from handleNewThread
+  const handleOpenAddCaseModal = () => {
     setIsAddCaseModalOpen(true);
-    // The original clearAllStates() is removed as "New Case" now means creating one.
-    // If a separate "clear form" is needed, it would be a different button.
   };
 
   const handleFilesChange = async (newFiles: UploadedFile[]) => {
@@ -237,7 +223,6 @@ function AppLayoutContent() {
       toast({ title: "No Active Case", description: "Please select a case before uploading files.", variant: "destructive"});
       return;
     }
-    // Logic to determine which files are new and which were removed
     const oldFileIds = new Set(uploadedFiles.map(f => f.id));
     const newFileIds = new Set(newFiles.map(f => f.id));
 
@@ -245,21 +230,18 @@ function AppLayoutContent() {
     const filesToRemoveIds = uploadedFiles.filter(f => !newFileIds.has(f.id)).map(f => f.id);
 
     try {
-      // Upload new files
       for (const file of filesToAdd) {
-        if (file.dataUrl) { // Ensure dataUrl is present for new uploads
+        if (file.dataUrl) { 
           await uploadFileToCaseService(activeCaseId, file.id, file.name, file.type, file.size, file.dataUrl);
         }
       }
-      // Remove deleted files
       for (const fileId of filesToRemoveIds) {
         await removeFileFromCaseService(activeCaseId, fileId);
       }
-      setUploadedFiles(newFiles); // Update local state after successful operations
+      setUploadedFiles(newFiles); 
       toast({ title: "Files Updated", description: "Document list has been synchronized."});
     } catch (error) {
       console.error("Error updating files:", error);
-      // Potentially revert to previous state or fetch fresh state if update fails partially
       toast({ title: "File Update Failed", description: "Could not sync all file changes.", variant: "destructive"});
     }
   };
@@ -279,15 +261,14 @@ function AppLayoutContent() {
       caseId: activeCaseId,
     };
     
-    // Prepare history for API: use messages *before* adding the current userMessage
-    const historyForApi = chatMessages.map(msg => ({
-      role: msg.sender === 'user' ? 'user' : 'assistant',
-      content: msg.text
-    } as {role: 'user' | 'assistant'; content: string})); // Explicit type for Perplexity
+    const historyForApi = chatMessages.map(msg => ({ // Use chatMessages *before* adding current userMessage
+        role: msg.sender === 'user' ? 'user' : 'assistant',
+        content: msg.text
+      } as {role: 'user' | 'assistant'; content: string}));
         
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
-    setViewMode('chatActive'); // Switch to chat view if not already
+    setViewMode('chatActive'); 
     setChatInputText('');
 
     try {
@@ -295,9 +276,9 @@ function AppLayoutContent() {
 
       const chatbotInput: GenerateChatbotResponseInput = {
         userMessage: text, 
-        chatHistory: historyForApi, // Send history *before* current message
-        caseDetails: JSON.stringify(currentCaseDetails), // Send current case details
-        uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[], // Send dataUrls of uploaded files
+        chatHistory: historyForApi,
+        caseDetails: JSON.stringify(currentCaseDetails), 
+        uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[], 
       };
 
       const result = await generateChatbotResponse(chatbotInput);
@@ -308,8 +289,8 @@ function AppLayoutContent() {
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
-        citations: result.citations, // Store citations if provided by API
-        searchResults: result.searchResults, // Store search results if provided
+        citations: result.citations, 
+        searchResults: result.searchResults, 
       };
       setChatMessages(prev => [...prev, botReplyMessage]);
       await saveChatMessage(activeCaseId, botReplyMessage);
@@ -319,7 +300,6 @@ function AppLayoutContent() {
       const errorMessage = error instanceof Error ? error.message : "Failed to get a response.";
       toast({ title: "Chat Error", description: errorMessage, variant: "destructive"});
       
-      // Add an error message to chat for user feedback
       const errorBotReply: AppChatMessage = {
         id: crypto.randomUUID(),
         text: "Sorry, I encountered an error. Please try again.",
@@ -355,13 +335,13 @@ function AppLayoutContent() {
               {viewMode === 'details' && (
                 <div className="space-y-8">
                   <CaseDetailsForm 
-                    key={activeCaseId} // Re-mount form on case change to reset with initialData
+                    key={activeCaseId} 
                     onSubmit={handleFormSubmit} 
                     initialData={currentCaseDetails} 
                     isSubmitting={isMlLoading}
                   />
                   <DocumentUploadPanel 
-                    key={`docs-${activeCaseId}`} // Re-mount on case change
+                    key={`docs-${activeCaseId}`} 
                     files={uploadedFiles} 
                     onFilesChange={handleFilesChange} 
                   />
@@ -421,7 +401,6 @@ function AppLayoutContent() {
               )}
               </main>
             </ScrollArea>
-            {/* Chat Input Area - always visible but behavior depends on viewMode/activeCaseId */}
             <div className="p-4 border-t bg-background">
               <div className="flex items-center gap-2">
                 <Input
@@ -446,10 +425,9 @@ function AppLayoutContent() {
       </div>
     </div>
 
-    {/* Add New Case Modal */}
     <Dialog open={isAddCaseModalOpen} onOpenChange={(isOpen) => {
         setIsAddCaseModalOpen(isOpen);
-        if (!isOpen) setNewCaseNameInput(''); // Reset input when closing
+        if (!isOpen) setNewCaseNameInput(''); 
     }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
@@ -484,6 +462,3 @@ function AppLayoutContent() {
     </>
   );
 }
-
-
-    
