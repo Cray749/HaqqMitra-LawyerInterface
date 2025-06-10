@@ -1,4 +1,5 @@
 import { config } from 'dotenv';
-config();
+config({ path: '.env.local' }); // Ensure .env.local is loaded for dev CLI
 
 import '@/ai/flows/generate-weak-points-summary.ts';
+import '@/ai/flows/generate-powerpoint-outline.ts'; // Added this import
