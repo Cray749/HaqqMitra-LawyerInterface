@@ -9,17 +9,19 @@ import {
   DocumentUploadPanel,
   MlPredictionOutput,
 } from '@/components/app';
-import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, ChatHistoryItem } from '@/types';
+import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData } from '@/types';
 import { initialCaseDetails } from '@/types';
-import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar'; // Added SidebarTrigger
+import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar'; 
 import { Button } from '@/components/ui/button';
-import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft } from 'lucide-react'; // Added PanelLeft for potential direct use if needed
+import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2 } from 'lucide-react'; 
 import { useToast } from '@/hooks/use-toast';
 import {
   generateCaseAnalysis,
   GenerateCaseAnalysisInput,
   generateChatbotResponse,
   GenerateChatbotResponseInput,
+  generateStrategySnapshot, // Added new flow
+  GenerateStrategySnapshotInput, // Added input type for new flow
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
@@ -34,7 +36,6 @@ import { Label } from '@/components/ui/label';
 
 type ViewMode = 'details' | 'chatActive';
 
-// Main component definition
 export default function AppPage() {
   const isMobile = useIsMobile();
   return (
@@ -44,10 +45,9 @@ export default function AppPage() {
   );
 }
 
-// Extracted content component
 function AppLayoutContent() {
   const { toast } = useToast();
-  const { open: isSidebarOpenOnDesktop, isMobile } = useSidebar(); // Get sidebar state for desktop
+  const { open: isSidebarOpenOnDesktop, isMobile } = useSidebar(); 
 
   const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null);
   const [cases, setCases] = React.useState<Space[]>([]);
@@ -56,6 +56,9 @@ function AppLayoutContent() {
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadedFile[]>([]);
   const [mlOutput, setMlOutput] = React.useState<MlOutputData | null>(null);
   const [isMlLoading, setIsMlLoading] = React.useState(false);
+
+  const [strategySnapshot, setStrategySnapshot] = React.useState<StrategySnapshotData | null>(null);
+  const [isStrategyLoading, setIsStrategyLoading] = React.useState(false);
   
   const [chatMessages, setChatMessages] = React.useState<AppChatMessage[]>([]);
   const [isBotReplying, setIsBotReplying] = React.useState(false);
@@ -69,7 +72,6 @@ function AppLayoutContent() {
 
   const currentCase = React.useMemo(() => cases.find(s => s.id === activeCaseId), [cases, activeCaseId]);
 
-  // Fetch initial cases
   React.useEffect(() => {
     const loadCases = async () => {
       try {
@@ -89,7 +91,6 @@ function AppLayoutContent() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast]); 
 
-  // Load case details, files, and chat when activeCaseId changes
   React.useEffect(() => {
     if (activeCaseId) {
       const loadCaseData = async () => {
@@ -101,6 +102,7 @@ function AppLayoutContent() {
             setCurrentCaseDetails(detailedCase.details || initialCaseDetails);
             setUploadedFiles(detailedCase.files || []);
             setMlOutput(null); 
+            setStrategySnapshot(null); // Reset strategy snapshot on case change
             
             const messages = await getChatMessages(activeCaseId);
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
@@ -138,7 +140,8 @@ function AppLayoutContent() {
       toast({ title: "Case Created", description: `Case "${newCase.name}" has been added.`});
     } catch (error: any) {
       console.error("Failed to create case:", error);
-      toast({ title: "Error Creating Case", description: error.message || "Could not create case.", variant: "destructive" });
+      const detailedErrorMessage = error.message || "Could not create case.";
+      toast({ title: "Error Creating Case", description: detailedErrorMessage, variant: "destructive" });
     }
   };
 
@@ -146,7 +149,6 @@ function AppLayoutContent() {
     if (id !== activeCaseId) {
        setActiveCaseId(id);
     }
-    // Sidebar closing on mobile is handled by ui/sidebar's SheetContent
   };
   
   const handleCaseDetailsChange = (newDetails: CaseDetails) => {
@@ -157,12 +159,14 @@ function AppLayoutContent() {
     setCurrentCaseDetails(initialCaseDetails);
     setUploadedFiles([]);
     setMlOutput(null);
+    setStrategySnapshot(null);
     setIsMlLoading(false);
+    setIsStrategyLoading(false);
     setChatMessages([]);
     setChatInputText('');
     setViewMode('details'); 
     if (showToast && activeCaseId) { 
-      toast({ title: "Inputs Cleared", description: "Form inputs and ML outputs for the current case have been reset."});
+      toast({ title: "Inputs Cleared", description: "Form inputs and AI outputs for the current case have been reset."});
     }
   };
   
@@ -178,11 +182,13 @@ function AppLayoutContent() {
 
       if (!data.enableMlPrediction) {
         setMlOutput(null); 
+        setStrategySnapshot(null); // Also clear strategy snapshot if ML is disabled
         return;
       }
 
       setIsMlLoading(true);
       setMlOutput(null); 
+      setStrategySnapshot(null); // Clear previous strategy snapshot
 
       const caseAnalysisInput: GenerateCaseAnalysisInput = {
         caseDetails: JSON.stringify(data),
@@ -193,16 +199,14 @@ function AppLayoutContent() {
       const generatedMlOutput: MlOutputData = {
         estimatedCost: analysisResult.estimatedCost,
         expectedDuration: analysisResult.expectedDuration,
-        strongPoints: analysisResult.strongPointsSummary,
-        weakPoints: analysisResult.weakPointsSummary,
         winProbability: analysisResult.winProbability,
         lossProbability: analysisResult.lossProbability,
       };
       setMlOutput(generatedMlOutput);
-      toast({ title: "Prediction Complete", description: "AI analysis results are now available."});
+      toast({ title: "Base Analysis Complete", description: "AI analysis for cost, duration, and probabilities is available."});
 
     } catch (error) {
-      console.error("Error during case update or AI analysis:", error);
+      console.error("Error during case update or base AI analysis:", error);
       const errorMessage = error instanceof Error ? error.message : "An error occurred during AI analysis.";
       toast({ title: "Operation Failed", description: errorMessage, variant: "destructive"});
       setMlOutput(null); 
@@ -210,6 +214,37 @@ function AppLayoutContent() {
       setIsMlLoading(false);
     }
   };
+
+  const handleGenerateStrategySnapshot = async () => {
+    if (!activeCaseId || !currentCaseDetails) {
+      toast({ title: "Missing Data", description: "Please ensure a case is active and details are filled.", variant: "destructive"});
+      return;
+    }
+    if (!currentCaseDetails.enableMlPrediction) {
+      toast({ title: "ML Disabled", description: "Please enable ML Prediction in Case Details to generate a strategy.", variant: "default"});
+      return;
+    }
+
+    setIsStrategyLoading(true);
+    setStrategySnapshot(null);
+    try {
+      const strategyInput: GenerateStrategySnapshotInput = {
+        caseDetails: JSON.stringify(currentCaseDetails),
+        uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name),
+      };
+      const result = await generateStrategySnapshot(strategyInput);
+      setStrategySnapshot(result);
+      toast({ title: "Strategy Snapshot Generated", description: "AI-powered strategy insights are now available." });
+    } catch (error) {
+      console.error("Error generating strategy snapshot:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to generate strategy snapshot.";
+      toast({ title: "Strategy Generation Failed", description: errorMessage, variant: "destructive"});
+      setStrategySnapshot(null);
+    } finally {
+      setIsStrategyLoading(false);
+    }
+  };
+
 
   const handleOpenAddCaseModal = () => {
     setIsAddCaseModalOpen(true);
@@ -258,10 +293,10 @@ function AppLayoutContent() {
       caseId: activeCaseId,
     };
     
-    const historyForApi = chatMessages.map(msg => ({
+    const historyForApi = chatMessages.map(msg => ({ // Ensure this only contains previous messages
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.text
-      } as {role: 'user' | 'assistant'; content: string}));
+      } as {role: 'user' | 'assistant' | 'system'; content: string})); // Added system for completeness
         
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
@@ -273,7 +308,7 @@ function AppLayoutContent() {
 
       const chatbotInput: GenerateChatbotResponseInput = {
         userMessage: text, 
-        chatHistory: historyForApi, // Send history *before* current user message
+        chatHistory: historyForApi, 
         caseDetails: JSON.stringify(currentCaseDetails), 
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[], 
       };
@@ -322,13 +357,12 @@ function AppLayoutContent() {
 
       {!isMobile && (
         <SidebarTrigger
-          size="icon" // Ensures h-10 w-10
+          size="icon" 
           className={cn(
             "fixed top-1/2 -translate-y-1/2 z-20 transition-all duration-200 ease-in-out",
-            "shadow-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground" // Added some styling
+            "shadow-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground" 
           )}
           style={{
-            // --sidebar-width is 16rem, --sidebar-width-icon is 3rem. Button is 2.5rem (w-10), so half is 1.25rem.
             left: isSidebarOpenOnDesktop ? 'calc(var(--sidebar-width) - 1.25rem)' : 'calc(var(--sidebar-width-icon) - 1.25rem)',
           }}
         />
@@ -357,8 +391,15 @@ function AppLayoutContent() {
                     files={uploadedFiles} 
                     onFilesChange={handleFilesChange} 
                   />
-                  {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput)) && (
-                    <MlPredictionOutput isLoading={isMlLoading} data={mlOutput} />
+                  {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput || isStrategyLoading || strategySnapshot)) && (
+                    <MlPredictionOutput 
+                      isLoading={isMlLoading} 
+                      data={mlOutput}
+                      strategySnapshot={strategySnapshot}
+                      isStrategyLoading={isStrategyLoading}
+                      onGenerateStrategySnapshot={handleGenerateStrategySnapshot}
+                      caseActive={!!activeCaseId && !!currentCaseDetails}
+                    />
                   )}
                 </div>
               )}
