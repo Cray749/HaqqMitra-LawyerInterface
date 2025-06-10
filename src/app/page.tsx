@@ -13,28 +13,31 @@ import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as App
 import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar'; 
 import { Button } from '@/components/ui/button';
-import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2 } from 'lucide-react'; 
+import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2, Swords, Scale, LogOut } from 'lucide-react'; 
 import { useToast } from '@/hooks/use-toast';
 import {
   generateCaseAnalysis,
   GenerateCaseAnalysisInput,
   generateChatbotResponse,
   GenerateChatbotResponseInput,
-  generateStrategySnapshot, // Added new flow
-  GenerateStrategySnapshotInput, // Added input type for new flow
+  generateStrategySnapshot,
+  GenerateStrategySnapshotInput,
+  generateDevilsAdvocateResponse, // Added for Devil's Advocate
+  GenerateDevilsAdvocateResponseInput, // Added for Devil's Advocate
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 
 
-type ViewMode = 'details' | 'chatActive';
+type ViewMode = 'details' | 'chatActive' | 'devilsAdvocateActive';
 
 export default function AppPage() {
   const isMobile = useIsMobile();
@@ -63,6 +66,11 @@ function AppLayoutContent() {
   const [chatMessages, setChatMessages] = React.useState<AppChatMessage[]>([]);
   const [isBotReplying, setIsBotReplying] = React.useState(false);
   const [chatInputText, setChatInputText] = React.useState('');
+
+  const [devilsAdvocateMessages, setDevilsAdvocateMessages] = React.useState<AppChatMessage[]>([]);
+  const [isDevilsAdvocateReplying, setIsDevilsAdvocateReplying] = React.useState(false);
+  const [devilsAdvocateChatInputText, setDevilsAdvocateChatInputText] = React.useState('');
+  const [isDevilsAdvocateModeActive, setIsDevilsAdvocateModeActive] = React.useState(false);
 
   const [viewMode, setViewMode] = React.useState<ViewMode>('details');
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
@@ -102,11 +110,16 @@ function AppLayoutContent() {
             setCurrentCaseDetails(detailedCase.details || initialCaseDetails);
             setUploadedFiles(detailedCase.files || []);
             setMlOutput(null); 
-            setStrategySnapshot(null); // Reset strategy snapshot on case change
+            setStrategySnapshot(null);
             
             const messages = await getChatMessages(activeCaseId);
+            // Filter messages for normal chat vs devil's advocate if stored separately
+            // For now, assuming getChatMessages gets normal chat, and devil's advocate uses its own state
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
+            setDevilsAdvocateMessages([]); // Clear devil's advocate messages for new case
+            
             setViewMode('details'); 
+            setIsDevilsAdvocateModeActive(false); // Ensure DA mode is off
           }
         } catch (error) {
           console.error(`Failed to load data for case ${activeCaseId}:`, error);
@@ -121,10 +134,22 @@ function AppLayoutContent() {
   }, [activeCaseId, toast]); 
 
   React.useEffect(() => {
-    if (viewMode === 'chatActive' && messagesEndRef.current) {
+    if ((viewMode === 'chatActive' || viewMode === 'devilsAdvocateActive') && messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [chatMessages, viewMode]);
+  }, [chatMessages, devilsAdvocateMessages, viewMode]);
+
+  React.useEffect(() => {
+    if (isDevilsAdvocateModeActive) {
+      document.documentElement.classList.add('devil-mode');
+    } else {
+      document.documentElement.classList.remove('devil-mode');
+    }
+    return () => {
+      document.documentElement.classList.remove('devil-mode');
+    };
+  }, [isDevilsAdvocateModeActive]);
+
 
   const handleAddCase = async () => {
     if (!newCaseNameInput.trim()) {
@@ -164,6 +189,9 @@ function AppLayoutContent() {
     setIsStrategyLoading(false);
     setChatMessages([]);
     setChatInputText('');
+    setDevilsAdvocateMessages([]);
+    setDevilsAdvocateChatInputText('');
+    setIsDevilsAdvocateModeActive(false);
     setViewMode('details'); 
     if (showToast && activeCaseId) { 
       toast({ title: "Inputs Cleared", description: "Form inputs and AI outputs for the current case have been reset."});
@@ -182,13 +210,13 @@ function AppLayoutContent() {
 
       if (!data.enableMlPrediction) {
         setMlOutput(null); 
-        setStrategySnapshot(null); // Also clear strategy snapshot if ML is disabled
+        setStrategySnapshot(null);
         return;
       }
 
       setIsMlLoading(true);
       setMlOutput(null); 
-      setStrategySnapshot(null); // Clear previous strategy snapshot
+      setStrategySnapshot(null);
 
       const caseAnalysisInput: GenerateCaseAnalysisInput = {
         caseDetails: JSON.stringify(data),
@@ -245,7 +273,6 @@ function AppLayoutContent() {
     }
   };
 
-
   const handleOpenAddCaseModal = () => {
     setIsAddCaseModalOpen(true);
   };
@@ -293,10 +320,10 @@ function AppLayoutContent() {
       caseId: activeCaseId,
     };
     
-    const historyForApi = chatMessages.map(msg => ({ // Ensure this only contains previous messages
+    const historyForApi = chatMessages.map(msg => ({
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.text
-      } as {role: 'user' | 'assistant' | 'system'; content: string})); // Added system for completeness
+      } as {role: 'user' | 'assistant' | 'system'; content: string}));
         
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
@@ -344,6 +371,96 @@ function AppLayoutContent() {
       setIsBotReplying(false);
     }
   };
+
+  const handleStartDevilsAdvocateMode = () => {
+    if (!activeCaseId) {
+      toast({ title: "No Active Case", description: "Please select or create a case first.", variant: "destructive" });
+      return;
+    }
+    setIsDevilsAdvocateModeActive(true);
+    setViewMode('devilsAdvocateActive');
+    setDevilsAdvocateMessages([]); // Start with a clean slate for Devil's Advocate chat
+    setDevilsAdvocateChatInputText('');
+    toast({ title: "Devil's Advocate Mode", description: "Challenge your case! The theme has changed."});
+  };
+
+  const handleEndDevilsAdvocateMode = () => {
+    setIsDevilsAdvocateModeActive(false);
+    setViewMode('details'); // Revert to details view after ending
+    toast({ title: "Devil's Advocate Mode Ended", description: "Theme restored to normal."});
+  };
+
+  const handleSendDevilsAdvocateMessage = async (text: string) => {
+    if (!text.trim()) return;
+    if (!activeCaseId) {
+      toast({ title: "No Active Case", description: "Please select a case to engage Devil's Advocate.", variant: "destructive" });
+      return;
+    }
+
+    const userMessage: AppChatMessage = {
+      id: crypto.randomUUID(),
+      text,
+      sender: 'user',
+      timestamp: new Date(),
+      caseId: activeCaseId,
+    };
+
+    const historyForApi = devilsAdvocateMessages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'assistant',
+      content: msg.text,
+    } as {role: 'user' | 'assistant' | 'system'; content: string}));
+
+    setDevilsAdvocateMessages(prev => [...prev, userMessage]);
+    setIsDevilsAdvocateReplying(true);
+    setDevilsAdvocateChatInputText('');
+
+    try {
+      // Note: We might not want to save Devil's Advocate chat to the same persistent store
+      // or use a different flag if we do. For now, it's transient in this state.
+      // await saveChatMessage(activeCaseId, userMessage); // Decide if DA chat needs saving
+
+      const devilsAdvocateInput: GenerateDevilsAdvocateResponseInput = {
+        userStatement: text,
+        chatHistory: historyForApi,
+        caseDetails: JSON.stringify(currentCaseDetails),
+        uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
+      };
+
+      const result = await generateDevilsAdvocateResponse(devilsAdvocateInput);
+
+      const botReplyMessage: AppChatMessage = {
+        id: crypto.randomUUID(),
+        text: result.devilReply,
+        sender: 'bot',
+        timestamp: new Date(),
+        caseId: activeCaseId,
+        // Citations/searchResults might not be relevant for Devil's Advocate, but schema allows
+        citations: result.citations,
+        searchResults: result.searchResults,
+      };
+      setDevilsAdvocateMessages(prev => [...prev, botReplyMessage]);
+      // await saveChatMessage(activeCaseId, botReplyMessage); // Decide if DA chat needs saving
+
+    } catch (error) {
+      console.error("Error getting Devil's Advocate reply:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to get a response from the Devil's Advocate.";
+      toast({ title: "Devil's Advocate Error", description: errorMessage, variant: "destructive" });
+
+      const errorBotReply: AppChatMessage = {
+        id: crypto.randomUUID(),
+        text: "The Devil is having trouble formulating a response. Please try again.",
+        sender: 'bot',
+        timestamp: new Date(),
+        caseId: activeCaseId,
+      };
+      setDevilsAdvocateMessages(prev => [...prev, errorBotReply]);
+    } finally {
+      setIsDevilsAdvocateReplying(false);
+    }
+  };
+
+  const currentChatList = viewMode === 'devilsAdvocateActive' ? devilsAdvocateMessages : chatMessages;
+  const currentBotReplying = viewMode === 'devilsAdvocateActive' ? isDevilsAdvocateReplying : isBotReplying;
   
   return (
     <>
@@ -374,7 +491,12 @@ function AppLayoutContent() {
               onAddNewCase={handleOpenAddCaseModal} 
               spaceName={currentCase?.name} 
               viewMode={viewMode}
-              onViewDetails={() => setViewMode('details')}
+              onViewDetails={() => {
+                if (isDevilsAdvocateModeActive) handleEndDevilsAdvocateMode(); // End DA if switching view
+                setViewMode('details');
+              }}
+              isDevilsAdvocateModeActive={isDevilsAdvocateModeActive}
+              onEndDevilsAdvocate={handleEndDevilsAdvocateMode}
             />
             <ScrollArea className="flex-1 custom-scrollbar" type="auto">
               <main className="p-4 md:p-6">
@@ -401,11 +523,34 @@ function AppLayoutContent() {
                       caseActive={!!activeCaseId && !!currentCaseDetails}
                     />
                   )}
+                  {activeCaseId && !isDevilsAdvocateModeActive && (
+                    <Card className="shadow-xl border-destructive/30">
+                      <CardHeader>
+                        <CardTitle className="font-headline text-2xl text-destructive flex items-center">
+                            <Swords className="mr-3 h-7 w-7"/>Engage Devil's Advocate
+                        </CardTitle>
+                        <CardDescription>Challenge your case strategy by arguing against an AI opponent.</CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm mb-4 text-foreground/80">
+                          Ready to test your arguments? Enter this mode to have an AI act as opposing counsel. It will counter your statements and help you identify weaknesses in your case. The interface will switch to a special theme for this focused interaction.
+                        </p>
+                        <Button 
+                            onClick={handleStartDevilsAdvocateMode} 
+                            className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md"
+                            size="lg"
+                            disabled={!activeCaseId}
+                        >
+                          <Scale className="mr-2 h-5 w-5" /> Start Devil's Advocate Mode
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
-              {viewMode === 'chatActive' && (
+              {(viewMode === 'chatActive' || viewMode === 'devilsAdvocateActive') && (
                 <div className="space-y-4">
-                  {chatMessages.map((msg) => (
+                  {currentChatList.map((msg) => (
                     <div
                       key={msg.id}
                       className={cn(
@@ -423,10 +568,12 @@ function AppLayoutContent() {
                           "max-w-[70%] rounded-xl px-4 py-2 text-sm shadow-md",
                           msg.sender === 'user'
                             ? 'bg-secondary text-secondary-foreground rounded-br-none'
-                            : 'bg-accent text-accent-foreground rounded-bl-none'
+                            : (viewMode === 'devilsAdvocateActive' ? 'bg-red-700 text-white rounded-bl-none' : 'bg-accent text-accent-foreground rounded-bl-none')
                         )}
                       >
                         {msg.text}
+                        {/* Optionally display citations/search results here if needed for DA mode */}
+                        {/* msg.citations && ... */}
                       </div>
                       {msg.sender === 'user' && (
                          <Avatar className="h-8 w-8">
@@ -435,16 +582,18 @@ function AppLayoutContent() {
                       )}
                     </div>
                   ))}
-                  {isBotReplying && chatMessages.length > 0 && chatMessages[chatMessages.length-1].sender === 'user' && (
+                  {currentBotReplying && currentChatList.length > 0 && currentChatList[currentChatList.length-1].sender === 'user' && (
                      <div className="flex items-end gap-2 justify-start">
                         <Avatar className="h-8 w-8">
                           <AvatarFallback><Bot className="h-5 w-5 text-accent" /></AvatarFallback>
                         </Avatar>
-                        <div className="max-w-[70%] rounded-xl px-4 py-2 text-sm shadow-md bg-accent text-accent-foreground rounded-bl-none">
+                        <div className={cn("max-w-[70%] rounded-xl px-4 py-2 text-sm shadow-md rounded-bl-none",
+                           viewMode === 'devilsAdvocateActive' ? 'bg-red-700 text-white' : 'bg-accent text-accent-foreground'
+                        )}>
                             <div className="flex items-center space-x-1">
-                                <span className="h-2 w-2 bg-accent-foreground rounded-full animate-pulse delay-75"></span>
-                                <span className="h-2 w-2 bg-accent-foreground rounded-full animate-pulse delay-150"></span>
-                                <span className="h-2 w-2 bg-accent-foreground rounded-full animate-pulse delay-300"></span>
+                                <span className={cn("h-2 w-2 rounded-full animate-pulse delay-75", viewMode === 'devilsAdvocateActive' ? 'bg-white/70' : 'bg-accent-foreground/70')}></span>
+                                <span className={cn("h-2 w-2 rounded-full animate-pulse delay-150", viewMode === 'devilsAdvocateActive' ? 'bg-white/70' : 'bg-accent-foreground/70')}></span>
+                                <span className={cn("h-2 w-2 rounded-full animate-pulse delay-300", viewMode === 'devilsAdvocateActive' ? 'bg-white/70' : 'bg-accent-foreground/70')}></span>
                             </div>
                         </div>
                     </div>
@@ -454,26 +603,50 @@ function AppLayoutContent() {
               )}
               </main>
             </ScrollArea>
-            <div className="p-4 border-t bg-background">
-              <div className="flex items-center gap-2">
-                <Input
-                  type="text"
-                  placeholder={activeCaseId ? "Ask a question about this case..." : "Please select or create a case first"}
-                  value={chatInputText}
-                  onChange={(e) => setChatInputText(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && !isBotReplying && activeCaseId && handleSendMessage(chatInputText)}
-                  disabled={isBotReplying || !activeCaseId}
-                  className="flex-1"
-                />
-                <Button 
-                  onClick={() => handleSendMessage(chatInputText)} 
-                  disabled={!chatInputText.trim() || isBotReplying || !activeCaseId} 
-                  className="bg-accent text-accent-foreground hover:bg-accent/90 px-3"
-                >
-                  <SendHorizonal className="h-5 w-5" />
-                </Button>
-              </div>
-            </div>
+            {(viewMode === 'chatActive' || viewMode === 'devilsAdvocateActive') && (
+                <div className="p-4 border-t bg-background">
+                <div className="flex items-center gap-2">
+                    <Input
+                    type="text"
+                    placeholder={
+                        viewMode === 'devilsAdvocateActive' 
+                        ? (activeCaseId ? "Enter your argument..." : "Select a case first.")
+                        : (activeCaseId ? "Ask a question about this case..." : "Please select or create a case first")
+                    }
+                    value={viewMode === 'devilsAdvocateActive' ? devilsAdvocateChatInputText : chatInputText}
+                    onChange={(e) => viewMode === 'devilsAdvocateActive' ? setDevilsAdvocateChatInputText(e.target.value) : setChatInputText(e.target.value)}
+                    onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                        if (viewMode === 'devilsAdvocateActive' && !isDevilsAdvocateReplying && activeCaseId) {
+                            handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
+                        } else if (viewMode !== 'devilsAdvocateActive' && !isBotReplying && activeCaseId) { // Use !== for normal chat
+                            handleSendMessage(chatInputText);
+                        }
+                        }
+                    }}
+                    disabled={currentBotReplying || !activeCaseId}
+                    className="flex-1"
+                    />
+                    <Button 
+                    onClick={() => {
+                        if (viewMode === 'devilsAdvocateActive' && activeCaseId) {
+                        handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
+                        } else if (viewMode !== 'devilsAdvocateActive' && activeCaseId) {
+                        handleSendMessage(chatInputText);
+                        }
+                    }} 
+                    disabled={
+                        viewMode === 'devilsAdvocateActive' 
+                        ? (!devilsAdvocateChatInputText.trim() || currentBotReplying || !activeCaseId) 
+                        : (!chatInputText.trim() || currentBotReplying || !activeCaseId)
+                    }
+                    className={cn("px-3", viewMode === 'devilsAdvocateActive' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-accent text-accent-foreground hover:bg-accent/90')}
+                    >
+                    <SendHorizonal className="h-5 w-5" />
+                    </Button>
+                </div>
+                </div>
+            )}
           </SidebarInset>
       </div>
     </div>

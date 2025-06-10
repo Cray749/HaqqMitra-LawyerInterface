@@ -6,4 +6,5 @@ import '@/ai/flows/generate-weak-points-summary.ts';
 import '@/ai/flows/generate-powerpoint-outline.ts';
 import '@/ai/flows/generate-chatbot-response.ts';
 import '@/ai/flows/generate-case-analysis.ts'; 
-import '@/ai/flows/generate-strategy-snapshot.ts'; // Added new import
+import '@/ai/flows/generate-strategy-snapshot.ts';
+import '@/ai/flows/generate-devils-advocate-response.ts'; // Added import for devil's advocate flow
