@@ -17,7 +17,7 @@ const ChatMessageSchema = z.object({
   content: z.string(),
 });
 
-export const GenerateDevilsAdvocateResponseInputSchema = z.object({
+const GenerateDevilsAdvocateResponseInputSchema = z.object({
   userStatement: z.string().describe("The user's current statement or argument to be challenged."),
   chatHistory: z.array(ChatMessageSchema).describe("The history of the Devil's Advocate conversation so far. Optional.").optional(),
   caseDetails: z.string().describe('Detailed information about the case as a JSON string. Optional.'),
@@ -31,7 +31,7 @@ export type GenerateDevilsAdvocateResponseInput = z.infer<
   typeof GenerateDevilsAdvocateResponseInputSchema
 >;
 
-export const GenerateDevilsAdvocateResponseOutputSchema = z.object({
+const GenerateDevilsAdvocateResponseOutputSchema = z.object({
   devilReply: z.string().describe("The Devil's Advocate counter-argument or challenge."),
   citations: z.array(z.any()).optional().describe('Citations from Perplexity if any.'),
   searchResults: z.array(z.any()).optional().describe('Search results from Perplexity if any.'),
