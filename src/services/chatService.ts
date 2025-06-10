@@ -15,18 +15,21 @@ import {
 } from 'firebase/firestore';
 import type { ChatMessage } from '@/types';
 
-// Helper function to ensure db is initialized
+// Top-level check to ensure Firebase Firestore is available when this module loads
+if (!db) {
+  const errMsg = "CRITICAL_ERROR_CHAT_SERVICE_INIT: Firestore 'db' object is not initialized. This indicates a problem with Firebase setup in 'src/lib/firebase.ts' or environment variables.";
+  console.error(errMsg);
+  throw new Error(errMsg);
+}
+
+// Helper function to ensure db is initialized before an operation
 async function ensureDbInitialized() {
   if (!db) {
-    console.error('Firestore db object is not initialized in chatService. This should not happen if firebase.ts is correctly set up.');
-    throw new Error('Firestore database is not initialized in chatService. Check Firebase configuration and initialization in firebase.ts.');
+    console.error('FATAL_CHAT_SERVICE: Firestore db object is unexpectedly not initialized at runtime. Check Firebase configuration.');
+    throw new Error('Firestore database is not available in chatService.');
   }
 }
 
-// No AppChatMessage needed if ChatMessage in types.ts already includes caseId (optional)
-// interface AppChatMessage extends ChatMessage {
-//     caseId: string; 
-// }
 
 export async function saveChatMessage(caseId: string, message: ChatMessage): Promise<void> {
   await ensureDbInitialized();
@@ -41,12 +44,9 @@ export async function saveChatMessage(caseId: string, message: ChatMessage): Pro
     const messageDataToSave = {
       text: message.text,
       sender: message.sender,
-      // Ensure timestamp is a Firestore Timestamp or serverTimestamp for consistent ordering
       timestamp: message.timestamp instanceof Date ? Timestamp.fromDate(message.timestamp) : serverTimestamp(),
-      // Explicitly do not save caseId within the subcollection document if not needed there
-      // caseId: message.caseId, // Only if you want to denormalize caseId into each message doc
-      citations: message.citations || null, // Store if present, otherwise null
-      searchResults: message.searchResults || null, // Store if present, otherwise null
+      citations: message.citations || null,
+      searchResults: message.searchResults || null,
     };
     
     await setDoc(messageDocRef, messageDataToSave);
@@ -69,7 +69,6 @@ export async function getChatMessages(caseId: string): Promise<ChatMessage[]> {
 
     const messages: ChatMessage[] = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
-      // Convert Firestore Timestamp to JS Date
       const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date();
       
       return {
@@ -77,7 +76,7 @@ export async function getChatMessages(caseId: string): Promise<ChatMessage[]> {
         text: data.text,
         sender: data.sender as 'user' | 'bot',
         timestamp: timestamp,
-        caseId: caseId, // Add caseId context back for client-side use if needed
+        caseId: caseId, 
         citations: data.citations,
         searchResults: data.searchResults,
       } as ChatMessage;

@@ -17,19 +17,33 @@ import {
 import { ref, uploadString, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import type { Space, CaseDetails, UploadedFile } from '@/types';
 
-// Helper function to ensure db is initialized
+// Top-level check to ensure Firebase services are available when this module loads
+if (!db) {
+  const errMsg = "CRITICAL_ERROR_CASE_SERVICE_INIT: Firestore 'db' object is not initialized. This indicates a problem with Firebase setup in 'src/lib/firebase.ts' or environment variables.";
+  console.error(errMsg);
+  throw new Error(errMsg);
+}
+if (!storage) {
+    const errMsg = "CRITICAL_ERROR_CASE_SERVICE_INIT: Firebase Storage 'storage' object is not initialized. This indicates a problem with Firebase setup in 'src/lib/firebase.ts' or environment variables.";
+    console.error(errMsg);
+    // Not throwing an error for storage here to allow some functions to work if only Firestore is needed,
+    // but functions requiring storage will fail if it's truly uninitialized.
+    // Consider if this service can operate meaningfully without storage. If not, throw an error.
+}
+
+// Helper function to ensure db is initialized before an operation
 async function ensureDbInitialized() {
   if (!db) {
-    console.error('Firestore db object is not initialized in caseService. This should not happen if firebase.ts is correctly set up.');
-    throw new Error('Firestore database is not initialized in caseService. Check Firebase configuration and initialization in firebase.ts.');
+    console.error('FATAL_CASE_SERVICE: Firestore db object is unexpectedly not initialized at runtime. Check Firebase configuration.');
+    throw new Error('Firestore database is not available in caseService.');
   }
 }
 
-// Helper function to ensure storage is initialized
+// Helper function to ensure storage is initialized before an operation
 async function ensureStorageInitialized() {
   if (!storage) {
-    console.error('Firebase Storage object is not initialized in caseService. This should not happen if firebase.ts is correctly set up.');
-    throw new Error('Firebase Storage is not initialized in caseService. Check Firebase configuration and initialization in firebase.ts.');
+    console.error('FATAL_CASE_SERVICE: Firebase Storage object is unexpectedly not initialized at runtime. Check Firebase configuration.');
+    throw new Error('Firebase Storage is not available in caseService.');
   }
 }
 
@@ -94,12 +108,11 @@ export async function createCase(caseName: string, caseId?: string): Promise<Spa
       name: caseName,
       id: idToUse,
       files: [],
-      details: null, // Storing null for details initially
+      details: null, 
       createdAt: Timestamp.now()
     };
     await setDoc(caseRef, newCaseServerData);
     
-    // Return data consistent with the Space type, details will be undefined initially
     const newCaseClientData: Space = {
       id: idToUse,
       name: caseName,
@@ -108,8 +121,8 @@ export async function createCase(caseName: string, caseId?: string): Promise<Spa
     };
     return newCaseClientData;
   } catch (error) {
-    console.error("Error creating or fetching case: ", error);
-    throw new Error(`Failed to create or fetch case "${caseName}".`);
+    console.error(`Error creating or fetching case "${caseName}" (ID: ${idToUse}): `, error); // Log includes the actual error from Firebase
+    throw new Error(`Failed to create or fetch case "${caseName}". Review console for underlying Firebase error.`);
   }
 }
 
@@ -119,15 +132,17 @@ export async function updateCaseDetails(caseId: string, details: CaseDetails): P
   const caseDocRef = doc(db, 'cases', caseId);
   try {
     const detailsForFirestore: any = { ...details };
-    if (details.filingDate) {
-      detailsForFirestore.filingDate = Timestamp.fromDate(new Date(details.filingDate));
-    } else {
-      delete detailsForFirestore.filingDate; 
+    if (details.filingDate instanceof Date) {
+      detailsForFirestore.filingDate = Timestamp.fromDate(details.filingDate);
+    } else if (details.filingDate === undefined || details.filingDate === null) {
+      detailsForFirestore.filingDate = null; // Explicitly set to null if cleared
     }
-    if (details.nextHearingDate) {
-      detailsForFirestore.nextHearingDate = Timestamp.fromDate(new Date(details.nextHearingDate));
-    } else {
-      delete detailsForFirestore.nextHearingDate; 
+    // else it might be already a Timestamp if data came directly from Firestore and wasn't converted, though types suggest Date
+
+    if (details.nextHearingDate instanceof Date) {
+      detailsForFirestore.nextHearingDate = Timestamp.fromDate(details.nextHearingDate);
+    } else if (details.nextHearingDate === undefined || details.nextHearingDate === null) {
+      detailsForFirestore.nextHearingDate = null; // Explicitly set to null if cleared
     }
     
     await updateDoc(caseDocRef, { details: detailsForFirestore });
@@ -148,13 +163,12 @@ export async function deleteCase(caseId: string): Promise<void> {
     const storageFilesList = await listAll(caseStorageFolderRef);
     await Promise.all(storageFilesList.items.map(fileRef => deleteObject(fileRef)));
     
-    storageFilesList.prefixes.forEach(async (folderRef) => {
+    // This part for deleting prefixes (subfolders) might be too simplistic if deep nesting exists.
+    // For now, assuming direct files or one level of subfolders.
+    for (const folderRef of storageFilesList.prefixes) {
         const nestedFiles = await listAll(folderRef);
         await Promise.all(nestedFiles.items.map(fileRef => deleteObject(fileRef)));
-        // Note: This does not handle deeper nesting. If you have many levels, a recursive solution is needed.
-        // For now, assuming one level of prefixes (if any) or direct files.
-    });
-
+    }
 
     const chatMessagesRef = collection(db, 'cases', caseId, 'chatMessages');
     const chatMessagesSnap = await getDocs(chatMessagesRef);
@@ -186,14 +200,14 @@ export async function uploadFileToCase(caseId: string, fileId: string, fileName:
     await uploadString(fileUploadRef, dataUrl, 'data_url');
     const downloadURL = await getDownloadURL(fileUploadRef);
 
-    const fileMetadataForFirestore: Partial<UploadedFile> = { // Use Partial as 'file' object is not stored
+    const fileMetadataForFirestore: Omit<UploadedFile, 'file' | 'dataUrl'> & {uploadedAt: Timestamp} = { 
       id: fileId,
       name: fileName,
       type: fileType,
       size: fileSize,
       path: filePath, 
       downloadURL: downloadURL, 
-      uploadedAt: Timestamp.now().toDate(), // Store as JS Date in Firestore via Timestamp
+      uploadedAt: Timestamp.now(),
     };
 
     await updateDoc(caseDocRef, {
@@ -202,13 +216,14 @@ export async function uploadFileToCase(caseId: string, fileId: string, fileName:
     
     return {
         id: fileId,
+        file: new File([], fileName, { type: fileType }), // Placeholder, original File object is client-side
         name: fileName,
         size: fileSize,
         type: fileType,
-        dataUrl: dataUrl, // Client-side dataUrl
-        downloadURL: downloadURL, // Storage download URL
+        dataUrl: dataUrl, 
+        downloadURL: downloadURL, 
         path: filePath,
-        uploadedAt: (fileMetadataForFirestore.uploadedAt as Timestamp).toDate(), // Ensure it's a JS Date
+        uploadedAt: fileMetadataForFirestore.uploadedAt.toDate(),
     } as UploadedFile;
 
   } catch (error) {
@@ -225,24 +240,38 @@ export async function removeFileFromCase(caseId: string, fileId: string): Promis
 
   try {
     const caseSnap = await getDoc(caseDocRef);
-    if (!caseSnap.exists()) throw new Error("Case not found for removal.");
+    if (!caseSnap.exists()) {
+        console.warn(`Case with ID ${caseId} not found for file removal. File ID: ${fileId}`);
+        throw new Error("Case not found for file removal.");
+    }
 
     const caseData = caseSnap.data();
-    const fileToRemove = caseData.files?.find((f: any) => f.id === fileId);
+    const filesArray = caseData.files as Array<Partial<UploadedFile>> || [];
+    const fileToRemove = filesArray.find(f => f.id === fileId);
 
     if (!fileToRemove || !fileToRemove.path) {
-      console.warn(`File with ID ${fileId} not found in case ${caseId} data or path missing, skipping storage deletion. Proceeding to remove from Firestore array.`);
+      console.warn(`File with ID ${fileId} not found in case ${caseId} data or path missing. Proceeding to remove from Firestore array if present.`);
     } else {
       const fileStorageRef = ref(storage, fileToRemove.path);
-      await deleteObject(fileStorageRef).catch(err => {
-        console.warn(`Could not delete file ${fileToRemove.path} from storage (it may have been already deleted or path was incorrect):`, err);
-      });
+      try {
+        await deleteObject(fileStorageRef);
+        console.log(`File ${fileToRemove.path} deleted from storage.`);
+      } catch (storageError: any) {
+        // Common error if file doesn't exist is 'storage/object-not-found'
+        if (storageError.code === 'storage/object-not-found') {
+          console.warn(`File ${fileToRemove.path} not found in storage, may have been already deleted.`);
+        } else {
+          console.warn(`Could not delete file ${fileToRemove.path} from storage:`, storageError);
+          // Decide if this should throw or just warn. For now, warn and proceed with Firestore update.
+        }
+      }
     }
     
-    const updatedFiles = caseData.files?.filter((f: any) => f.id !== fileId) || [];
+    const updatedFiles = filesArray.filter(f => f.id !== fileId);
     await updateDoc(caseDocRef, { files: updatedFiles });
 
-  } catch (error) {
+  } catch (error)
+{
     console.error(`Error removing file ${fileId} from case ${caseId}: `, error);
     throw new Error("Failed to remove file.");
   }
