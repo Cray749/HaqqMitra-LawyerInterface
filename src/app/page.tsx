@@ -11,9 +11,9 @@ import {
 } from '@/components/app';
 import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData } from '@/types';
 import { initialCaseDetails } from '@/types';
-import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar'; 
+import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2, Swords, Scale, LogOut } from 'lucide-react'; 
+import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2, Swords, Scale, LogOut } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   generateCaseAnalysis,
@@ -22,8 +22,8 @@ import {
   GenerateChatbotResponseInput,
   generateStrategySnapshot,
   GenerateStrategySnapshotInput,
-  generateDevilsAdvocateResponse, // Added for Devil's Advocate
-  GenerateDevilsAdvocateResponseInput, // Added for Devil's Advocate
+  generateDevilsAdvocateResponse,
+  GenerateDevilsAdvocateResponseInput,
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
@@ -50,11 +50,11 @@ export default function AppPage() {
 
 function AppLayoutContent() {
   const { toast } = useToast();
-  const { open: isSidebarOpenOnDesktop, isMobile } = useSidebar(); 
+  const { open: isSidebarOpenOnDesktop, isMobile } = useSidebar();
 
   const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null);
   const [cases, setCases] = React.useState<Space[]>([]);
-  
+
   const [currentCaseDetails, setCurrentCaseDetails] = React.useState<CaseDetails>(initialCaseDetails);
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadedFile[]>([]);
   const [mlOutput, setMlOutput] = React.useState<MlOutputData | null>(null);
@@ -62,7 +62,7 @@ function AppLayoutContent() {
 
   const [strategySnapshot, setStrategySnapshot] = React.useState<StrategySnapshotData | null>(null);
   const [isStrategyLoading, setIsStrategyLoading] = React.useState(false);
-  
+
   const [chatMessages, setChatMessages] = React.useState<AppChatMessage[]>([]);
   const [isBotReplying, setIsBotReplying] = React.useState(false);
   const [chatInputText, setChatInputText] = React.useState('');
@@ -97,7 +97,7 @@ function AppLayoutContent() {
     };
     loadCases();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]); 
+  }, [toast]);
 
   React.useEffect(() => {
     if (activeCaseId) {
@@ -105,21 +105,19 @@ function AppLayoutContent() {
         try {
           const caseData = cases.find(c => c.id === activeCaseId);
           if (caseData) {
-            const detailedCase = await createCaseService(caseData.name, caseData.id); 
-            
+            const detailedCase = await createCaseService(caseData.name, caseData.id);
+
             setCurrentCaseDetails(detailedCase.details || initialCaseDetails);
             setUploadedFiles(detailedCase.files || []);
-            setMlOutput(null); 
+            setMlOutput(null);
             setStrategySnapshot(null);
-            
+
             const messages = await getChatMessages(activeCaseId);
-            // Filter messages for normal chat vs devil's advocate if stored separately
-            // For now, assuming getChatMessages gets normal chat, and devil's advocate uses its own state
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
-            setDevilsAdvocateMessages([]); // Clear devil's advocate messages for new case
-            
-            setViewMode('details'); 
-            setIsDevilsAdvocateModeActive(false); // Ensure DA mode is off
+            setDevilsAdvocateMessages([]); 
+
+            setViewMode('details');
+            setIsDevilsAdvocateModeActive(false);
           }
         } catch (error) {
           console.error(`Failed to load data for case ${activeCaseId}:`, error);
@@ -128,10 +126,10 @@ function AppLayoutContent() {
       };
       loadCaseData();
     } else {
-      clearAllStates(false); 
+      clearAllStates(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeCaseId, toast]); 
+  }, [activeCaseId, toast]);
 
   React.useEffect(() => {
     if ((viewMode === 'chatActive' || viewMode === 'devilsAdvocateActive') && messagesEndRef.current) {
@@ -175,7 +173,7 @@ function AppLayoutContent() {
        setActiveCaseId(id);
     }
   };
-  
+
   const handleCaseDetailsChange = (newDetails: CaseDetails) => {
     setCurrentCaseDetails(newDetails);
   };
@@ -192,38 +190,38 @@ function AppLayoutContent() {
     setDevilsAdvocateMessages([]);
     setDevilsAdvocateChatInputText('');
     setIsDevilsAdvocateModeActive(false);
-    setViewMode('details'); 
-    if (showToast && activeCaseId) { 
+    setViewMode('details');
+    if (showToast && activeCaseId) {
       toast({ title: "Inputs Cleared", description: "Form inputs and AI outputs for the current case have been reset."});
     }
   };
-  
+
   const handleFormSubmit = async (data: CaseDetails) => {
     if (!activeCaseId) {
       toast({ title: "No Active Case", description: "Please select or create a case first.", variant: "destructive" });
       return;
     }
-    setCurrentCaseDetails(data); 
+    setCurrentCaseDetails(data);
     try {
       await updateCaseDetailsService(activeCaseId, data);
       toast({ title: "Case Updated", description: "Case details have been saved." });
 
       if (!data.enableMlPrediction) {
-        setMlOutput(null); 
+        setMlOutput(null);
         setStrategySnapshot(null);
         return;
       }
 
       setIsMlLoading(true);
-      setMlOutput(null); 
-      setStrategySnapshot(null);
+      setMlOutput(null);
+      setStrategySnapshot(null); // Also clear strategy snapshot if base ML is re-run
 
       const caseAnalysisInput: GenerateCaseAnalysisInput = {
         caseDetails: JSON.stringify(data),
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name),
       };
       const analysisResult = await generateCaseAnalysis(caseAnalysisInput);
-      
+
       const generatedMlOutput: MlOutputData = {
         estimatedCost: analysisResult.estimatedCost,
         expectedDuration: analysisResult.expectedDuration,
@@ -237,7 +235,7 @@ function AppLayoutContent() {
       console.error("Error during case update or base AI analysis:", error);
       const errorMessage = error instanceof Error ? error.message : "An error occurred during AI analysis.";
       toast({ title: "Operation Failed", description: errorMessage, variant: "destructive"});
-      setMlOutput(null); 
+      setMlOutput(null);
     } finally {
       setIsMlLoading(false);
     }
@@ -290,21 +288,21 @@ function AppLayoutContent() {
 
     try {
       for (const file of filesToAdd) {
-        if (file.dataUrl) { 
+        if (file.dataUrl) {
           await uploadFileToCaseService(activeCaseId, file.id, file.name, file.type, file.size, file.dataUrl);
         }
       }
       for (const fileId of filesToRemoveIds) {
         await removeFileFromCaseService(activeCaseId, fileId);
       }
-      setUploadedFiles(newFiles); 
+      setUploadedFiles(newFiles);
       toast({ title: "Files Updated", description: "Document list has been synchronized."});
     } catch (error) {
       console.error("Error updating files:", error);
       toast({ title: "File Update Failed", description: "Could not sync all file changes.", variant: "destructive"});
     }
   };
-  
+
   const handleSendMessage = async (text: string) => {
     if (!text.trim()) return;
     if (!activeCaseId) {
@@ -312,32 +310,32 @@ function AppLayoutContent() {
       return;
     }
 
-    const userMessage: AppChatMessage = { 
-      id: crypto.randomUUID(), 
-      text, 
-      sender: 'user', 
+    const userMessage: AppChatMessage = {
+      id: crypto.randomUUID(),
+      text,
+      sender: 'user',
       timestamp: new Date(),
       caseId: activeCaseId,
     };
-    
+
     const historyForApi = chatMessages.map(msg => ({
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.text
       } as {role: 'user' | 'assistant' | 'system'; content: string}));
-        
+
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
-    setViewMode('chatActive'); 
+    // setViewMode('chatActive'); // No longer automatically switch view mode here, user is already in chatActive
     setChatInputText('');
 
     try {
       await saveChatMessage(activeCaseId, userMessage);
 
       const chatbotInput: GenerateChatbotResponseInput = {
-        userMessage: text, 
-        chatHistory: historyForApi, 
-        caseDetails: JSON.stringify(currentCaseDetails), 
-        uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[], 
+        userMessage: text,
+        chatHistory: historyForApi,
+        caseDetails: JSON.stringify(currentCaseDetails),
+        uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
       };
 
       const result = await generateChatbotResponse(chatbotInput);
@@ -348,8 +346,8 @@ function AppLayoutContent() {
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
-        citations: result.citations, 
-        searchResults: result.searchResults, 
+        citations: result.citations,
+        searchResults: result.searchResults,
       };
       setChatMessages(prev => [...prev, botReplyMessage]);
       await saveChatMessage(activeCaseId, botReplyMessage);
@@ -358,7 +356,7 @@ function AppLayoutContent() {
       console.error("Error sending message or getting bot reply:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to get a response.";
       toast({ title: "Chat Error", description: errorMessage, variant: "destructive"});
-      
+
       const errorBotReply: AppChatMessage = {
         id: crypto.randomUUID(),
         text: "Sorry, I encountered an error. Please try again.",
@@ -379,15 +377,22 @@ function AppLayoutContent() {
     }
     setIsDevilsAdvocateModeActive(true);
     setViewMode('devilsAdvocateActive');
-    setDevilsAdvocateMessages([]); // Start with a clean slate for Devil's Advocate chat
+    setDevilsAdvocateMessages([]); 
     setDevilsAdvocateChatInputText('');
     toast({ title: "Devil's Advocate Mode", description: "Challenge your case! The theme has changed."});
   };
 
   const handleEndDevilsAdvocateMode = () => {
     setIsDevilsAdvocateModeActive(false);
-    setViewMode('details'); // Revert to details view after ending
+    setViewMode('details'); 
     toast({ title: "Devil's Advocate Mode Ended", description: "Theme restored to normal."});
+  };
+
+  const handleToggleNormalChat = () => {
+    if (isDevilsAdvocateModeActive) {
+      handleEndDevilsAdvocateMode(); // Gracefully end DA mode
+    }
+    setViewMode('chatActive'); // Then switch to normal chat
   };
 
   const handleSendDevilsAdvocateMessage = async (text: string) => {
@@ -415,10 +420,6 @@ function AppLayoutContent() {
     setDevilsAdvocateChatInputText('');
 
     try {
-      // Note: We might not want to save Devil's Advocate chat to the same persistent store
-      // or use a different flag if we do. For now, it's transient in this state.
-      // await saveChatMessage(activeCaseId, userMessage); // Decide if DA chat needs saving
-
       const devilsAdvocateInput: GenerateDevilsAdvocateResponseInput = {
         userStatement: text,
         chatHistory: historyForApi,
@@ -434,12 +435,10 @@ function AppLayoutContent() {
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
-        // Citations/searchResults might not be relevant for Devil's Advocate, but schema allows
         citations: result.citations,
         searchResults: result.searchResults,
       };
       setDevilsAdvocateMessages(prev => [...prev, botReplyMessage]);
-      // await saveChatMessage(activeCaseId, botReplyMessage); // Decide if DA chat needs saving
 
     } catch (error) {
       console.error("Error getting Devil's Advocate reply:", error);
@@ -461,12 +460,12 @@ function AppLayoutContent() {
 
   const currentChatList = viewMode === 'devilsAdvocateActive' ? devilsAdvocateMessages : chatMessages;
   const currentBotReplying = viewMode === 'devilsAdvocateActive' ? isDevilsAdvocateReplying : isBotReplying;
-  
+
   return (
     <>
     <div className="flex min-h-screen bg-background">
       <SpaceSidebar
-        caseItems={cases.map(c => ({id: c.id, name: c.name}))} 
+        caseItems={cases.map(c => ({id: c.id, name: c.name}))}
         selectedCaseId={activeCaseId}
         onTriggerAddCase={() => setIsAddCaseModalOpen(true)}
         onSelectCase={handleSelectCase}
@@ -474,10 +473,10 @@ function AppLayoutContent() {
 
       {!isMobile && (
         <SidebarTrigger
-          size="icon" 
+          size="icon"
           className={cn(
             "fixed top-1/2 -translate-y-1/2 z-20 transition-all duration-200 ease-in-out",
-            "shadow-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground" 
+            "shadow-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground"
           )}
           style={{
             left: isSidebarOpenOnDesktop ? 'calc(var(--sidebar-width) - 1.25rem)' : 'calc(var(--sidebar-width-icon) - 1.25rem)',
@@ -485,16 +484,17 @@ function AppLayoutContent() {
         />
       )}
 
-      <div className="flex flex-1 flex-col"> 
+      <div className="flex flex-1 flex-col">
           <SidebarInset className="flex-1 flex flex-col">
-            <HeaderControls 
-              onAddNewCase={handleOpenAddCaseModal} 
-              spaceName={currentCase?.name} 
+            <HeaderControls
+              onAddNewCase={handleOpenAddCaseModal}
+              spaceName={currentCase?.name}
               viewMode={viewMode}
               onViewDetails={() => {
-                if (isDevilsAdvocateModeActive) handleEndDevilsAdvocateMode(); // End DA if switching view
+                if (isDevilsAdvocateModeActive) handleEndDevilsAdvocateMode(); 
                 setViewMode('details');
               }}
+              onToggleNormalChat={handleToggleNormalChat}
               isDevilsAdvocateModeActive={isDevilsAdvocateModeActive}
               onEndDevilsAdvocate={handleEndDevilsAdvocateMode}
             />
@@ -502,20 +502,20 @@ function AppLayoutContent() {
               <main className="p-4 md:p-6">
               {viewMode === 'details' && (
                 <div className="space-y-8">
-                  <CaseDetailsForm 
-                    key={activeCaseId} 
-                    onSubmit={handleFormSubmit} 
-                    initialData={currentCaseDetails} 
+                  <CaseDetailsForm
+                    key={activeCaseId}
+                    onSubmit={handleFormSubmit}
+                    initialData={currentCaseDetails}
                     isSubmitting={isMlLoading}
                   />
-                  <DocumentUploadPanel 
-                    key={`docs-${activeCaseId}`} 
-                    files={uploadedFiles} 
-                    onFilesChange={handleFilesChange} 
+                  <DocumentUploadPanel
+                    key={`docs-${activeCaseId}`}
+                    files={uploadedFiles}
+                    onFilesChange={handleFilesChange}
                   />
                   {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput || isStrategyLoading || strategySnapshot)) && (
-                    <MlPredictionOutput 
-                      isLoading={isMlLoading} 
+                    <MlPredictionOutput
+                      isLoading={isMlLoading}
                       data={mlOutput}
                       strategySnapshot={strategySnapshot}
                       isStrategyLoading={isStrategyLoading}
@@ -535,8 +535,8 @@ function AppLayoutContent() {
                         <p className="text-sm mb-4 text-foreground/80">
                           Ready to test your arguments? Enter this mode to have an AI act as opposing counsel. It will counter your statements and help you identify weaknesses in your case. The interface will switch to a special theme for this focused interaction.
                         </p>
-                        <Button 
-                            onClick={handleStartDevilsAdvocateMode} 
+                        <Button
+                            onClick={handleStartDevilsAdvocateMode}
                             className="w-full bg-destructive text-destructive-foreground hover:bg-destructive/90 shadow-md"
                             size="lg"
                             disabled={!activeCaseId}
@@ -572,8 +572,16 @@ function AppLayoutContent() {
                         )}
                       >
                         {msg.text}
-                        {/* Optionally display citations/search results here if needed for DA mode */}
-                        {/* msg.citations && ... */}
+                        {viewMode === 'chatActive' && msg.sender === 'bot' && (msg.citations || msg.searchResults) && (
+                          <div className="mt-2 text-xs opacity-80">
+                            {msg.citations && msg.citations.length > 0 && (
+                              <div><strong>Citations:</strong> {msg.citations.map((c:any, i:number) => <span key={i}>{c.text || 'source'}</span> )}</div>
+                            )}
+                            {msg.searchResults && msg.searchResults.length > 0 && (
+                               <div><strong>Sources:</strong> {msg.searchResults.map((s:any, i:number) => <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent-foreground/70">{s.title || 'link'}</a> )}</div>
+                            )}
+                          </div>
+                        )}
                       </div>
                       {msg.sender === 'user' && (
                          <Avatar className="h-8 w-8">
@@ -609,7 +617,7 @@ function AppLayoutContent() {
                     <Input
                     type="text"
                     placeholder={
-                        viewMode === 'devilsAdvocateActive' 
+                        viewMode === 'devilsAdvocateActive'
                         ? (activeCaseId ? "Enter your argument..." : "Select a case first.")
                         : (activeCaseId ? "Ask a question about this case..." : "Please select or create a case first")
                     }
@@ -619,7 +627,7 @@ function AppLayoutContent() {
                         if (e.key === 'Enter') {
                         if (viewMode === 'devilsAdvocateActive' && !isDevilsAdvocateReplying && activeCaseId) {
                             handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
-                        } else if (viewMode !== 'devilsAdvocateActive' && !isBotReplying && activeCaseId) { // Use !== for normal chat
+                        } else if (viewMode === 'chatActive' && !isBotReplying && activeCaseId) {
                             handleSendMessage(chatInputText);
                         }
                         }
@@ -627,17 +635,17 @@ function AppLayoutContent() {
                     disabled={currentBotReplying || !activeCaseId}
                     className="flex-1"
                     />
-                    <Button 
+                    <Button
                     onClick={() => {
                         if (viewMode === 'devilsAdvocateActive' && activeCaseId) {
                         handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
-                        } else if (viewMode !== 'devilsAdvocateActive' && activeCaseId) {
+                        } else if (viewMode === 'chatActive' && activeCaseId) {
                         handleSendMessage(chatInputText);
                         }
-                    }} 
+                    }}
                     disabled={
-                        viewMode === 'devilsAdvocateActive' 
-                        ? (!devilsAdvocateChatInputText.trim() || currentBotReplying || !activeCaseId) 
+                        viewMode === 'devilsAdvocateActive'
+                        ? (!devilsAdvocateChatInputText.trim() || currentBotReplying || !activeCaseId)
                         : (!chatInputText.trim() || currentBotReplying || !activeCaseId)
                     }
                     className={cn("px-3", viewMode === 'devilsAdvocateActive' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-accent text-accent-foreground hover:bg-accent/90')}
@@ -653,7 +661,7 @@ function AppLayoutContent() {
 
     <Dialog open={isAddCaseModalOpen} onOpenChange={(isOpen) => {
         setIsAddCaseModalOpen(isOpen);
-        if (!isOpen) setNewCaseNameInput(''); 
+        if (!isOpen) setNewCaseNameInput('');
     }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>

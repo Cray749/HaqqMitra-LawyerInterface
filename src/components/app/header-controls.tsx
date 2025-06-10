@@ -3,23 +3,24 @@
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { PlusCircle, FileText, Scale, LogOut } from 'lucide-react';
+import { PlusCircle, FileText, MessageSquareText, LogOut } from 'lucide-react'; // Added MessageSquareText
 
 interface HeaderControlsProps {
   onAddNewCase: () => void;
   spaceName?: string;
   viewMode: 'details' | 'chatActive' | 'devilsAdvocateActive';
   onViewDetails: () => void;
+  onToggleNormalChat: () => void; // New prop
   isDevilsAdvocateModeActive: boolean;
   onEndDevilsAdvocate: () => void;
-  // Removed onStartDevilsAdvocate as it's triggered from page.tsx now
 }
 
-export function HeaderControls({ 
-  onAddNewCase, 
-  spaceName, 
-  viewMode, 
+export function HeaderControls({
+  onAddNewCase,
+  spaceName,
+  viewMode,
   onViewDetails,
+  onToggleNormalChat, // New prop
   isDevilsAdvocateModeActive,
   onEndDevilsAdvocate
 }: HeaderControlsProps) {
@@ -29,9 +30,9 @@ export function HeaderControls({
       <div className="flex-1">
         {spaceName && <h1 className="font-headline text-xl font-semibold">{spaceName}</h1>}
       </div>
-      
+
       <div className="flex items-center gap-2">
-        {(viewMode === 'chatActive' || viewMode === 'devilsAdvocateActive') && (
+        {viewMode !== 'details' && ( // Show "View Details" if in any chat mode or DA mode
            <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -46,7 +47,7 @@ export function HeaderControls({
           </TooltipProvider>
         )}
 
-        {isDevilsAdvocateModeActive ? (
+        {isDevilsAdvocateModeActive && (
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -55,17 +56,32 @@ export function HeaderControls({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                <p>Exit Devil's Advocate mode and return to case details.</p>
+                <p>Exit Devil's Advocate mode.</p>
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-        ) : null}
-        
+        )}
+
+        {!isDevilsAdvocateModeActive && viewMode !== 'chatActive' && ( // Show Chat Assistant if not in DA mode and not in normal chat
+           <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={onToggleNormalChat} variant="outline">
+                  <MessageSquareText className="mr-2 h-4 w-4" /> Chat Assistant
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Open the AI chat assistant for this case.</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
+
         <TooltipProvider>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button onClick={onAddNewCase} className="bg-accent text-accent-foreground hover:bg-accent/90">
-                <PlusCircle className="mr-2 h-4 w-4" /> New Case 
+                <PlusCircle className="mr-2 h-4 w-4" /> New Case
               </Button>
             </TooltipTrigger>
             <TooltipContent>
