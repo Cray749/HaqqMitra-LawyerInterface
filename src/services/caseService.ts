@@ -28,7 +28,6 @@ if (!storage) {
     console.error(errMsg);
     // Not throwing an error for storage here to allow some functions to work if only Firestore is needed,
     // but functions requiring storage will fail if it's truly uninitialized.
-    // Consider if this service can operate meaningfully without storage. If not, throw an error.
 }
 
 // Helper function to ensure db is initialized before an operation
@@ -120,9 +119,13 @@ export async function createCase(caseName: string, caseId?: string): Promise<Spa
       files: [],
     };
     return newCaseClientData;
-  } catch (error) {
+  } catch (error: any) {
+    const originalErrorMessage = error.message || 'Unknown Firebase error';
+    const originalErrorCode = error.code || 'N/A';
+    const detailedMessage = `Failed to create or fetch case "${caseName}". Original Firebase error (Code: ${originalErrorCode}, Message: ${originalErrorMessage})`;
+    
     console.error(`Error creating or fetching case "${caseName}" (ID: ${idToUse}): `, error); // Log includes the actual error from Firebase
-    throw new Error(`Failed to create or fetch case "${caseName}". Review console for underlying Firebase error.`);
+    throw new Error(detailedMessage);
   }
 }
 
@@ -135,14 +138,13 @@ export async function updateCaseDetails(caseId: string, details: CaseDetails): P
     if (details.filingDate instanceof Date) {
       detailsForFirestore.filingDate = Timestamp.fromDate(details.filingDate);
     } else if (details.filingDate === undefined || details.filingDate === null) {
-      detailsForFirestore.filingDate = null; // Explicitly set to null if cleared
+      detailsForFirestore.filingDate = null; 
     }
-    // else it might be already a Timestamp if data came directly from Firestore and wasn't converted, though types suggest Date
 
     if (details.nextHearingDate instanceof Date) {
       detailsForFirestore.nextHearingDate = Timestamp.fromDate(details.nextHearingDate);
     } else if (details.nextHearingDate === undefined || details.nextHearingDate === null) {
-      detailsForFirestore.nextHearingDate = null; // Explicitly set to null if cleared
+      detailsForFirestore.nextHearingDate = null; 
     }
     
     await updateDoc(caseDocRef, { details: detailsForFirestore });
@@ -163,8 +165,6 @@ export async function deleteCase(caseId: string): Promise<void> {
     const storageFilesList = await listAll(caseStorageFolderRef);
     await Promise.all(storageFilesList.items.map(fileRef => deleteObject(fileRef)));
     
-    // This part for deleting prefixes (subfolders) might be too simplistic if deep nesting exists.
-    // For now, assuming direct files or one level of subfolders.
     for (const folderRef of storageFilesList.prefixes) {
         const nestedFiles = await listAll(folderRef);
         await Promise.all(nestedFiles.items.map(fileRef => deleteObject(fileRef)));
@@ -216,7 +216,7 @@ export async function uploadFileToCase(caseId: string, fileId: string, fileName:
     
     return {
         id: fileId,
-        file: new File([], fileName, { type: fileType }), // Placeholder, original File object is client-side
+        file: new File([], fileName, { type: fileType }), 
         name: fileName,
         size: fileSize,
         type: fileType,
@@ -257,12 +257,10 @@ export async function removeFileFromCase(caseId: string, fileId: string): Promis
         await deleteObject(fileStorageRef);
         console.log(`File ${fileToRemove.path} deleted from storage.`);
       } catch (storageError: any) {
-        // Common error if file doesn't exist is 'storage/object-not-found'
         if (storageError.code === 'storage/object-not-found') {
           console.warn(`File ${fileToRemove.path} not found in storage, may have been already deleted.`);
         } else {
           console.warn(`Could not delete file ${fileToRemove.path} from storage:`, storageError);
-          // Decide if this should throw or just warn. For now, warn and proceed with Firestore update.
         }
       }
     }
@@ -270,9 +268,10 @@ export async function removeFileFromCase(caseId: string, fileId: string): Promis
     const updatedFiles = filesArray.filter(f => f.id !== fileId);
     await updateDoc(caseDocRef, { files: updatedFiles });
 
-  } catch (error)
-{
+  } catch (error) {
     console.error(`Error removing file ${fileId} from case ${caseId}: `, error);
     throw new Error("Failed to remove file.");
   }
 }
+
+    
