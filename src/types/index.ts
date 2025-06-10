@@ -2,6 +2,8 @@
 export interface Space {
   id: string;
   name: string;
+  details?: CaseDetails; // Optional, as it might not be immediately available or set
+  files?: UploadedFile[]; // Optional
   // threads: Thread[]; // Future enhancement
 }
 
@@ -41,11 +43,14 @@ export const initialCaseDetails: CaseDetails = {
 
 export interface UploadedFile {
   id: string;
-  file: File;
+  file: File; // Original File object, client-side only
   name: string;
   size: number;
   type: string;
-  dataUrl?: string; // For sending to AI flows
+  dataUrl?: string; // For sending to AI flows or immediate display
+  downloadURL?: string; // For files stored in Firebase Storage
+  path?: string; // Storage path
+  uploadedAt?: Date; // Timestamp of upload
 }
 
 export interface MlOutputData {
@@ -61,11 +66,14 @@ export interface ChatMessage {
   id: string;
   text: string;
   sender: 'user' | 'bot';
-  timestamp: Date;
+  timestamp: Date; // Firestore Timestamp will be converted to JS Date on fetch
+  caseId?: string; // Added for context, used in AppChatMessage
+  citations?: any[];
+  searchResults?: any[];
 }
 
 export interface ChatHistoryItem {
-  id: string;
+  id:string;
   timestamp: Date;
   preview: string;
   question: string;

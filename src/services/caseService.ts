@@ -12,27 +12,24 @@ import {
   deleteDoc,
   Timestamp,
   arrayUnion,
-  // arrayRemove, // Not used directly, using manual filter and update
   writeBatch,
-  // query, // Not used
-  // where, // Not used
 } from 'firebase/firestore';
-import { ref, uploadString, getDownloadURL, deleteObject, listAll } from 'firebase/storage'; // Added listAll
+import { ref, uploadString, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
 import type { Space, CaseDetails, UploadedFile } from '@/types';
 
 // Helper function to ensure db is initialized
 async function ensureDbInitialized() {
   if (!db) {
-    console.error('Firestore db object is not initialized. This should not happen if firebase.ts is correctly set up.');
-    throw new Error('Firestore database is not initialized. Check Firebase configuration and initialization in firebase.ts.');
+    console.error('Firestore db object is not initialized in caseService. This should not happen if firebase.ts is correctly set up.');
+    throw new Error('Firestore database is not initialized in caseService. Check Firebase configuration and initialization in firebase.ts.');
   }
 }
 
 // Helper function to ensure storage is initialized
 async function ensureStorageInitialized() {
   if (!storage) {
-    console.error('Firebase Storage object is not initialized. This should not happen if firebase.ts is correctly set up.');
-    throw new Error('Firebase Storage is not initialized. Check Firebase configuration and initialization in firebase.ts.');
+    console.error('Firebase Storage object is not initialized in caseService. This should not happen if firebase.ts is correctly set up.');
+    throw new Error('Firebase Storage is not initialized in caseService. Check Firebase configuration and initialization in firebase.ts.');
   }
 }
 
@@ -43,7 +40,6 @@ export async function getCases(): Promise<Space[]> {
     const casesSnapshot = await getDocs(collection(db, 'cases'));
     const casesList = casesSnapshot.docs.map(docSnap => {
         const data = docSnap.data();
-        // Ensure dates are converted from Timestamps to JS Dates if they exist
         const details = data.details ? {
             ...data.details,
             filingDate: data.details.filingDate instanceof Timestamp ? data.details.filingDate.toDate() : undefined,
@@ -56,9 +52,9 @@ export async function getCases(): Promise<Space[]> {
             details: details,
             files: data.files?.map((f:any) => ({
                 ...f,
-                // uploadedAt: f.uploadedAt instanceof Timestamp ? f.uploadedAt.toDate() : undefined // if you store and need this
+                uploadedAt: f.uploadedAt instanceof Timestamp ? f.uploadedAt.toDate() : undefined
             })) || [],
-        };
+        } as Space;
     });
     return casesList;
   } catch (error) {
@@ -89,20 +85,28 @@ export async function createCase(caseName: string, caseId?: string): Promise<Spa
             details: details,
             files: data.files?.map((f:any) => ({
                 ...f,
-                // uploadedAt: f.uploadedAt.toDate() : undefined
+                uploadedAt: f.uploadedAt instanceof Timestamp ? f.uploadedAt.toDate() : undefined,
             })) || [],
-        };
+        } as Space;
     }
 
-    const newCaseData: Space = {
+    const newCaseServerData = {
+      name: caseName,
+      id: idToUse,
+      files: [],
+      details: null, // Storing null for details initially
+      createdAt: Timestamp.now()
+    };
+    await setDoc(caseRef, newCaseServerData);
+    
+    // Return data consistent with the Space type, details will be undefined initially
+    const newCaseClientData: Space = {
       id: idToUse,
       name: caseName,
       details: undefined, 
       files: [],
     };
-    // Store basic info. details and files will be added/updated separately.
-    await setDoc(caseRef, { name: caseName, id: idToUse, files: [], details: null, createdAt: Timestamp.now() });
-    return newCaseData;
+    return newCaseClientData;
   } catch (error) {
     console.error("Error creating or fetching case: ", error);
     throw new Error(`Failed to create or fetch case "${caseName}".`);
@@ -116,15 +120,14 @@ export async function updateCaseDetails(caseId: string, details: CaseDetails): P
   try {
     const detailsForFirestore: any = { ...details };
     if (details.filingDate) {
-      // Ensure it's a JS Date object before converting to Timestamp
       detailsForFirestore.filingDate = Timestamp.fromDate(new Date(details.filingDate));
     } else {
-      delete detailsForFirestore.filingDate; // Remove if undefined
+      delete detailsForFirestore.filingDate; 
     }
     if (details.nextHearingDate) {
       detailsForFirestore.nextHearingDate = Timestamp.fromDate(new Date(details.nextHearingDate));
     } else {
-      delete detailsForFirestore.nextHearingDate; // Remove if undefined
+      delete detailsForFirestore.nextHearingDate; 
     }
     
     await updateDoc(caseDocRef, { details: detailsForFirestore });
@@ -141,21 +144,24 @@ export async function deleteCase(caseId: string): Promise<void> {
   const batch = writeBatch(db);
 
   try {
-    // 1. Delete all files in the case's storage folder
     const caseStorageFolderRef = ref(storage, `cases/${caseId}`);
     const storageFilesList = await listAll(caseStorageFolderRef);
     await Promise.all(storageFilesList.items.map(fileRef => deleteObject(fileRef)));
-    // Note: listAll is not recursive for subfolders. If you have prefixes (subfolders), they need separate handling.
-    // For this app, assuming files are directly under cases/${caseId}/
+    
+    storageFilesList.prefixes.forEach(async (folderRef) => {
+        const nestedFiles = await listAll(folderRef);
+        await Promise.all(nestedFiles.items.map(fileRef => deleteObject(fileRef)));
+        // Note: This does not handle deeper nesting. If you have many levels, a recursive solution is needed.
+        // For now, assuming one level of prefixes (if any) or direct files.
+    });
 
-    // 2. Delete all chat messages in the subcollection
+
     const chatMessagesRef = collection(db, 'cases', caseId, 'chatMessages');
     const chatMessagesSnap = await getDocs(chatMessagesRef);
     chatMessagesSnap.docs.forEach(docSnap => {
       batch.delete(docSnap.ref);
     });
     
-    // 3. Delete the main case document
     batch.delete(caseDocRef);
 
     await batch.commit();
@@ -173,21 +179,21 @@ export async function uploadFileToCase(caseId: string, fileId: string, fileName:
   await ensureStorageInitialized();
   
   const filePath = `cases/${caseId}/${fileId}-${fileName}`;
-  const fileUploadRef = ref(storage, filePath); // Changed variable name for clarity
+  const fileUploadRef = ref(storage, filePath);
   const caseDocRef = doc(db, 'cases', caseId);
 
   try {
     await uploadString(fileUploadRef, dataUrl, 'data_url');
     const downloadURL = await getDownloadURL(fileUploadRef);
 
-    const fileMetadataForFirestore = {
+    const fileMetadataForFirestore: Partial<UploadedFile> = { // Use Partial as 'file' object is not stored
       id: fileId,
       name: fileName,
       type: fileType,
       size: fileSize,
       path: filePath, 
       downloadURL: downloadURL, 
-      uploadedAt: Timestamp.now(),
+      uploadedAt: Timestamp.now().toDate(), // Store as JS Date in Firestore via Timestamp
     };
 
     await updateDoc(caseDocRef, {
@@ -199,9 +205,11 @@ export async function uploadFileToCase(caseId: string, fileId: string, fileName:
         name: fileName,
         size: fileSize,
         type: fileType,
-        dataUrl: dataUrl,
-        // file: undefined, // Original File object is not retained/reconstructed on server
-    } as UploadedFile; // Cast to UploadedFile, acknowledging 'file' property might be missing
+        dataUrl: dataUrl, // Client-side dataUrl
+        downloadURL: downloadURL, // Storage download URL
+        path: filePath,
+        uploadedAt: (fileMetadataForFirestore.uploadedAt as Timestamp).toDate(), // Ensure it's a JS Date
+    } as UploadedFile;
 
   } catch (error) {
     console.error(`Error uploading file ${fileName} for case ${caseId}: `, error);
@@ -239,5 +247,3 @@ export async function removeFileFromCase(caseId: string, fileId: string): Promis
     throw new Error("Failed to remove file.");
   }
 }
-
-    

@@ -5,7 +5,6 @@ import { db } from '@/lib/firebase';
 import {
   collection,
   doc,
-  addDoc,
   setDoc,
   getDocs,
   orderBy,
@@ -14,7 +13,7 @@ import {
   writeBatch,
   serverTimestamp,
 } from 'firebase/firestore';
-import type { ChatMessage } from '@/types'; // Assuming ChatMessage in types matches this structure
+import type { ChatMessage } from '@/types';
 
 // Helper function to ensure db is initialized
 async function ensureDbInitialized() {
@@ -24,11 +23,12 @@ async function ensureDbInitialized() {
   }
 }
 
-interface AppChatMessage extends ChatMessage {
-    caseId: string; // Ensure caseId is part of the message structure passed to save
-}
+// No AppChatMessage needed if ChatMessage in types.ts already includes caseId (optional)
+// interface AppChatMessage extends ChatMessage {
+//     caseId: string; 
+// }
 
-export async function saveChatMessage(caseId: string, message: AppChatMessage): Promise<void> {
+export async function saveChatMessage(caseId: string, message: ChatMessage): Promise<void> {
   await ensureDbInitialized();
   if (!caseId || !message || !message.id) {
     console.error("Invalid arguments for saveChatMessage: caseId and message.id are required.");
@@ -36,15 +36,20 @@ export async function saveChatMessage(caseId: string, message: AppChatMessage): 
   }
   try {
     const messagesCollectionRef = collection(db, 'cases', caseId, 'chatMessages');
-    const messageDocRef = doc(messagesCollectionRef, message.id); // Use message.id as Firestore document ID
+    const messageDocRef = doc(messagesCollectionRef, message.id);
 
-    const messageData = {
+    const messageDataToSave = {
       text: message.text,
       sender: message.sender,
-      timestamp: message.timestamp instanceof Date ? Timestamp.fromDate(message.timestamp) : serverTimestamp(), // Convert JS Date to Firestore Timestamp or use server timestamp
+      // Ensure timestamp is a Firestore Timestamp or serverTimestamp for consistent ordering
+      timestamp: message.timestamp instanceof Date ? Timestamp.fromDate(message.timestamp) : serverTimestamp(),
+      // Explicitly do not save caseId within the subcollection document if not needed there
+      // caseId: message.caseId, // Only if you want to denormalize caseId into each message doc
+      citations: message.citations || null, // Store if present, otherwise null
+      searchResults: message.searchResults || null, // Store if present, otherwise null
     };
     
-    await setDoc(messageDocRef, messageData);
+    await setDoc(messageDocRef, messageDataToSave);
   } catch (error) {
     console.error(`Error saving chat message for case ${caseId}:`, error);
     throw new Error('Failed to save chat message.');
@@ -64,12 +69,18 @@ export async function getChatMessages(caseId: string): Promise<ChatMessage[]> {
 
     const messages: ChatMessage[] = querySnapshot.docs.map(docSnap => {
       const data = docSnap.data();
+      // Convert Firestore Timestamp to JS Date
+      const timestamp = data.timestamp instanceof Timestamp ? data.timestamp.toDate() : new Date();
+      
       return {
         id: docSnap.id,
         text: data.text,
         sender: data.sender as 'user' | 'bot',
-        timestamp: data.timestamp, // Keep as Firestore Timestamp, page.tsx will convert
-      } as ChatMessage; // Cast, page.tsx expects id, text, sender, timestamp (Firebase Timestamp)
+        timestamp: timestamp,
+        caseId: caseId, // Add caseId context back for client-side use if needed
+        citations: data.citations,
+        searchResults: data.searchResults,
+      } as ChatMessage;
     });
     return messages;
   } catch (error) {
