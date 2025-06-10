@@ -109,7 +109,7 @@ function AppLayoutContent() {
             setMlOutput(null); // Clear previous ML output
             
             const messages = await getChatMessages(activeCaseId);
-            setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp.toDate()})));
+            setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
             setViewMode('details'); // Reset to details view
           }
         } catch (error) {
@@ -143,9 +143,9 @@ function AppLayoutContent() {
       setNewCaseNameInput('');
       setIsAddCaseModalOpen(false);
       toast({ title: "Case Created", description: `Case "${newCase.name}" has been added.`});
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to create case:", error);
-      toast({ title: "Error", description: "Could not create case.", variant: "destructive" });
+      toast({ title: "Error Creating Case", description: error.message || "Could not create case.", variant: "destructive" });
     }
   };
 
@@ -285,6 +285,15 @@ function AppLayoutContent() {
       timestamp: new Date(),
       caseId: activeCaseId,
     };
+    
+    // Prepare chat history for AI *before* adding current user message to local state
+    // This ensures `chatMessages` reflects the history prior to the current input.
+    const historyForApi = chatMessages.map(msg => ({
+      role: msg.sender === 'user' ? 'user' : 'assistant',
+      content: msg.text
+    }));
+    
+    // Now update UI and state with the new user message
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
     setViewMode('chatActive'); 
@@ -293,18 +302,9 @@ function AppLayoutContent() {
     try {
       await saveChatMessage(activeCaseId, userMessage);
 
-      // Prepare context for the AI
-      const formattedChatHistory = chatMessages.map(msg => ({
-        role: msg.sender === 'user' ? 'user' : 'assistant',
-        content: msg.text
-      }));
-      // Add the latest user message to history for the API call
-      formattedChatHistory.push({role: 'user', content: userMessage.text});
-
-
       const chatbotInput: GenerateChatbotResponseInput = {
-        userMessage: text,
-        chatHistory: formattedChatHistory,
+        userMessage: text, // Current user's message text
+        chatHistory: historyForApi, // History *before* the current user's message
         caseDetails: JSON.stringify(currentCaseDetails),
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
       };
@@ -317,8 +317,8 @@ function AppLayoutContent() {
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
-        citations: result.citations, // Store if needed
-        searchResults: result.searchResults, // Store if needed
+        citations: result.citations, 
+        searchResults: result.searchResults, 
       };
       setChatMessages(prev => [...prev, botReplyMessage]);
       await saveChatMessage(activeCaseId, botReplyMessage);
@@ -327,7 +327,7 @@ function AppLayoutContent() {
       console.error("Error sending message or getting bot reply:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to get a response.";
       toast({ title: "Chat Error", description: errorMessage, variant: "destructive"});
-      // Optionally, add a system error message to chat
+      
       const errorBotReply: AppChatMessage = {
         id: crypto.randomUUID(),
         text: "Sorry, I encountered an error. Please try again.",
@@ -367,7 +367,7 @@ function AppLayoutContent() {
                     onSubmit={handleFormSubmit} 
                     initialData={currentCaseDetails} 
                     isSubmitting={isMlLoading}
-                    onValuesChange={handleCaseDetailsChange}
+                    // onValuesChange={handleCaseDetailsChange} // Removed as direct RHF watch is not implemented yet
                   />
                   <DocumentUploadPanel 
                     key={`docs-${activeCaseId}`} // Ensure panel re-initializes for new case
@@ -454,7 +454,10 @@ function AppLayoutContent() {
       </div>
     </div>
 
-    <Dialog open={isAddCaseModalOpen} onOpenChange={setIsAddCaseModalOpen}>
+    <Dialog open={isAddCaseModalOpen} onOpenChange={(isOpen) => {
+        setIsAddCaseModalOpen(isOpen);
+        if (!isOpen) setNewCaseNameInput(''); // Clear input if modal is closed
+    }}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="font-headline">Add New Case</DialogTitle>
@@ -488,3 +491,6 @@ function AppLayoutContent() {
     </>
   );
 }
+
+
+    
