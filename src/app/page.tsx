@@ -11,19 +11,19 @@ import {
 } from '@/components/app';
 import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, ChatHistoryItem } from '@/types';
 import { initialCaseDetails } from '@/types';
-import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
+import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar'; // Added SidebarTrigger
 import { Button } from '@/components/ui/button';
-import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle } from 'lucide-react';
+import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft } from 'lucide-react'; // Added PanelLeft for potential direct use if needed
 import { useToast } from '@/hooks/use-toast';
 import {
-  generateCaseAnalysis, // Changed from generateWeakPointsSummary
-  GenerateCaseAnalysisInput, // Changed
+  generateCaseAnalysis,
+  GenerateCaseAnalysisInput,
   generateChatbotResponse,
   GenerateChatbotResponseInput,
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
-import { Input } from '@/components/ui/input'; // This is the chat Input
+import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
@@ -47,8 +47,7 @@ export default function AppPage() {
 // Extracted content component
 function AppLayoutContent() {
   const { toast } = useToast();
-  const { setOpen: setSidebarOpen } = useSidebar();
-  const isMobile = useIsMobile();
+  const { open: isSidebarOpenOnDesktop, isMobile } = useSidebar(); // Get sidebar state for desktop
 
   const [activeCaseId, setActiveCaseId] = React.useState<string | null>(null);
   const [cases, setCases] = React.useState<Space[]>([]);
@@ -147,9 +146,7 @@ function AppLayoutContent() {
     if (id !== activeCaseId) {
        setActiveCaseId(id);
     }
-    if (isMobile) {
-      setSidebarOpen(false);
-    }
+    // Sidebar closing on mobile is handled by ui/sidebar's SheetContent
   };
   
   const handleCaseDetailsChange = (newDetails: CaseDetails) => {
@@ -261,7 +258,7 @@ function AppLayoutContent() {
       caseId: activeCaseId,
     };
     
-    const historyForApi = chatMessages.map(msg => ({ // Use chatMessages *before* adding current userMessage
+    const historyForApi = chatMessages.map(msg => ({
         role: msg.sender === 'user' ? 'user' : 'assistant',
         content: msg.text
       } as {role: 'user' | 'assistant'; content: string}));
@@ -276,7 +273,7 @@ function AppLayoutContent() {
 
       const chatbotInput: GenerateChatbotResponseInput = {
         userMessage: text, 
-        chatHistory: historyForApi,
+        chatHistory: historyForApi, // Send history *before* current user message
         caseDetails: JSON.stringify(currentCaseDetails), 
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[], 
       };
@@ -322,6 +319,21 @@ function AppLayoutContent() {
         onTriggerAddCase={() => setIsAddCaseModalOpen(true)}
         onSelectCase={handleSelectCase}
       />
+
+      {!isMobile && (
+        <SidebarTrigger
+          size="icon" // Ensures h-10 w-10
+          className={cn(
+            "fixed top-1/2 -translate-y-1/2 z-20 transition-all duration-200 ease-in-out",
+            "shadow-lg border border-border bg-background hover:bg-accent hover:text-accent-foreground" // Added some styling
+          )}
+          style={{
+            // --sidebar-width is 16rem, --sidebar-width-icon is 3rem. Button is 2.5rem (w-10), so half is 1.25rem.
+            left: isSidebarOpenOnDesktop ? 'calc(var(--sidebar-width) - 1.25rem)' : 'calc(var(--sidebar-width-icon) - 1.25rem)',
+          }}
+        />
+      )}
+
       <div className="flex flex-1 flex-col"> 
           <SidebarInset className="flex-1 flex flex-col">
             <HeaderControls 
