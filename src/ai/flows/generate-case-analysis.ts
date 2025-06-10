@@ -19,7 +19,7 @@ const GenerateCaseAnalysisInputSchema = z.object({
 export type GenerateCaseAnalysisInput = z.infer<typeof GenerateCaseAnalysisInputSchema>;
 
 const GenerateCaseAnalysisOutputSchema = z.object({
-  estimatedCost: z.string().describe('Estimated legal costs for the case (e.g., "$10,000 - $20,000").'),
+  estimatedCost: z.string().describe('Estimated legal costs for the case in Indian Rupees (INR) (e.g., "₹10,000 - ₹20,000").'),
   expectedDuration: z.string().describe('Expected duration of the case (e.g., "6-12 months").'),
   winProbability: z.number().describe('Estimated win probability as a percentage (0-100).'),
   lossProbability: z.number().describe('Estimated loss probability as a percentage (0-100).'),
@@ -52,7 +52,7 @@ const generateCaseAnalysisFlow = ai.defineFlow(
 
     const systemPrompt = `You are an expert legal AI assistant. Based on the provided case details and any uploaded document summaries, analyze the case thoroughly.
 Provide the following information in a structured format:
-1.  Estimated Legal Costs (e.g., "$X,XXX - $Y,YYY" or "Approximately $Z,ZZZ").
+1.  Estimated Legal Costs in Indian Rupees (INR) (e.g., "₹X,XXX - ₹Y,YYY" or "Approximately ₹Z,ZZZ").
 2.  Expected Case Duration (e.g., "X-Y months" or "Approx. Z weeks").
 3.  Win Probability (as a percentage, e.g., "Win Probability: 75%").
 4.  Loss Probability (as a percentage, e.g., "Loss Probability: 25%").
@@ -60,7 +60,7 @@ Provide the following information in a structured format:
 6.  Weak Points (as a bulleted list).
 
 Your response should be structured EXACTLY as follows, with each item on a new line and clearly labeled:
-ESTIMATED COST: [Your estimation here]
+ESTIMATED COST (INR): [Your estimation here, e.g., ₹10,000 - ₹20,000]
 EXPECTED DURATION: [Your estimation here]
 WIN PROBABILITY: [Percentage]%
 LOSS PROBABILITY: [Percentage]%
@@ -89,7 +89,6 @@ ${input.caseDetails}
 
                 if (meta.includes('text/plain') || meta.includes('application/json') || meta.includes('text/html') || meta.includes('text/csv')) {
                     const textContent = Buffer.from(data, 'base64').toString('utf-8');
-                    // Include a snippet of the text content. Be mindful of token limits for the API.
                     docInfo = `Text Document Snippet: ${textContent.substring(0, 500)}${textContent.length > 500 ? '...' : ''}`;
                 } else if (meta.includes('application/pdf')) {
                     docInfo = `PDF Document (content not directly included, but note its presence).`;
@@ -140,9 +139,8 @@ ${input.caseDetails}
       const citations = responseData.choices[0]?.message?.citations;
       const searchResults = responseData.choices[0]?.search_results;
 
-      // Helper function to extract values based on headers
       const extractValue = (header: string, text: string, isNumericPercent: boolean = false): string | number => {
-        const regex = new RegExp(`^${header}:?\\s*(.+?)(%?)$`, "im");
+        const regex = new RegExp(`^${header.replace('(INR)', '\\(INR\\)')}:?\\s*(.+?)(%?)$`, "im");
         const match = text.match(regex);
         if (match && match[1]) {
           let value = match[1].trim();
@@ -160,7 +158,7 @@ ${input.caseDetails}
         if (headerIndex === -1) return "Not specified";
 
         let nextHeaderIndex = -1;
-        const headers = ["ESTIMATED COST:", "EXPECTED DURATION:", "WIN PROBABILITY:", "LOSS PROBABILITY:", "STRONG POINTS:", "WEAK POINTS:"];
+        const headers = ["ESTIMATED COST (INR):", "EXPECTED DURATION:", "WIN PROBABILITY:", "LOSS PROBABILITY:", "STRONG POINTS:", "WEAK POINTS:"];
         const currentHeaderPos = headers.indexOf(header.toUpperCase());
         for (let i = currentHeaderPos + 1; i < headers.length; i++) {
             const tempIdx = text.toUpperCase().indexOf(headers[i]);
@@ -175,7 +173,7 @@ ${input.caseDetails}
         return relevantText.trim() || "Not specified";
       };
 
-      const estimatedCost = extractValue("ESTIMATED COST", content) as string;
+      const estimatedCost = extractValue("ESTIMATED COST (INR)", content) as string;
       const expectedDuration = extractValue("EXPECTED DURATION", content) as string;
       const winProbability = extractValue("WIN PROBABILITY", content, true) as number;
       const lossProbability = extractValue("LOSS PROBABILITY", content, true) as number;

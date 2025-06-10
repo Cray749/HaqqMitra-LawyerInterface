@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
-import { DollarSign, Clock, TrendingUp, TrendingDown, Wand2, Lightbulb, ShieldAlert, MessageSquareQuote, Loader2 } from 'lucide-react';
+import { IndianRupee, Clock, TrendingUp, TrendingDown, Wand2, Lightbulb, ShieldAlert, MessageSquareQuote, Loader2 } from 'lucide-react'; // Changed DollarSign to IndianRupee
 import * as React from 'react';
 
 interface MlPredictionOutputProps {
@@ -125,7 +125,7 @@ export function MlPredictionOutput({
         {isLoading && !data && <p className="text-sm text-muted-foreground flex items-center"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading core analysis...</p>}
         {data && (
           <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            <MetricCard title="Estimated Cost" icon={DollarSign}>
+            <MetricCard title="Estimated Cost (INR)" icon={IndianRupee}>
               <div className="text-2xl font-bold text-primary">{data.estimatedCost}</div>
             </MetricCard>
             <MetricCard title="Expected Duration" icon={Clock}>

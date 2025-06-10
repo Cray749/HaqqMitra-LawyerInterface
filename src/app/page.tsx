@@ -8,13 +8,13 @@ import {
   CaseDetailsForm,
   DocumentUploadPanel,
   MlPredictionOutput,
-  DetailedCostRoadmap // Added import
+  DetailedCostRoadmap
 } from '@/components/app';
-import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData, DetailedCostRoadmapOutput } from '@/types'; // Added DetailedCostRoadmapOutput
+import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData, DetailedCostRoadmapOutput, CaseStageCost } from '@/types';
 import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
-import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2, Swords, Scale, LogOut, Briefcase, IndianRupee } from 'lucide-react'; // Added Briefcase, IndianRupee
+import { MessageSquareText, X, FileText, SendHorizonal, User, Bot, Loader2, Trash2, PlusCircle, PanelLeft, Wand2, Swords, Scale, LogOut, Briefcase, IndianRupee } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   generateCaseAnalysis,
@@ -25,8 +25,8 @@ import {
   GenerateStrategySnapshotInput,
   generateDevilsAdvocateResponse,
   GenerateDevilsAdvocateResponseInput,
-  generateDetailedCostRoadmap, // Added import
-  GenerateDetailedCostRoadmapInput, // Added import
+  generateDetailedCostRoadmap,
+  GenerateDetailedCostRoadmapInput,
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
@@ -41,6 +41,36 @@ import { Label } from '@/components/ui/label';
 
 
 type ViewMode = 'details' | 'chatActive' | 'devilsAdvocateActive';
+
+// Helper function to parse and sum INR cost strings
+const sumInrCosts = (stages: CaseStageCost[]): string => {
+  let minTotal = 0;
+  let maxTotal = 0;
+  let isRange = false;
+
+  stages.forEach(stage => {
+    const costStr = stage.estimatedCostINR.replace(/₹|,|Approx\.\s*/gi, '').trim();
+    const parts = costStr.split('-').map(p => p.trim());
+
+    if (parts.length === 2) {
+      minTotal += parseFloat(parts[0]) || 0;
+      maxTotal += parseFloat(parts[1]) || 0;
+      isRange = true;
+    } else if (parts.length === 1) {
+      const val = parseFloat(parts[0]) || 0;
+      minTotal += val;
+      maxTotal += val;
+    }
+  });
+
+  const formatInr = (num: number) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num);
+
+  if (isRange && minTotal !== maxTotal) {
+    return `${formatInr(minTotal)} - ${formatInr(maxTotal)}`;
+  }
+  return formatInr(minTotal); // Handles single values or ranges where min=max
+};
+
 
 export default function AppPage() {
   const isMobile = useIsMobile();
@@ -66,8 +96,8 @@ function AppLayoutContent() {
   const [strategySnapshot, setStrategySnapshot] = React.useState<StrategySnapshotData | null>(null);
   const [isStrategyLoading, setIsStrategyLoading] = React.useState(false);
 
-  const [detailedCostRoadmap, setDetailedCostRoadmap] = React.useState<DetailedCostRoadmapOutput | null>(null); // New state
-  const [isDetailedCostRoadmapLoading, setIsDetailedCostRoadmapLoading] = React.useState(false); // New state
+  const [detailedCostRoadmap, setDetailedCostRoadmap] = React.useState<DetailedCostRoadmapOutput | null>(null);
+  const [isDetailedCostRoadmapLoading, setIsDetailedCostRoadmapLoading] = React.useState(false);
 
 
   const [chatMessages, setChatMessages] = React.useState<AppChatMessage[]>([]);
@@ -118,7 +148,7 @@ function AppLayoutContent() {
             setUploadedFiles(detailedCase.files || []);
             setMlOutput(null);
             setStrategySnapshot(null);
-            setDetailedCostRoadmap(null); // Reset detailed cost roadmap
+            setDetailedCostRoadmap(null);
 
             const messages = await getChatMessages(activeCaseId);
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
@@ -179,7 +209,7 @@ function AppLayoutContent() {
   const handleSelectCase = (id: string) => {
     if (id !== activeCaseId) {
        setActiveCaseId(id);
-       setDetailedCostRoadmap(null); // Clear roadmap when switching cases
+       setDetailedCostRoadmap(null);
     }
   };
 
@@ -220,14 +250,14 @@ function AppLayoutContent() {
       if (!data.enableMlPrediction) {
         setMlOutput(null);
         setStrategySnapshot(null);
-        setDetailedCostRoadmap(null); // Also clear roadmap if ML is disabled
+        setDetailedCostRoadmap(null);
         return;
       }
 
       setIsMlLoading(true);
       setMlOutput(null);
       setStrategySnapshot(null); 
-      setDetailedCostRoadmap(null); // Also clear strategy snapshot and roadmap if base ML is re-run
+      setDetailedCostRoadmap(null);
 
       const caseAnalysisInput: GenerateCaseAnalysisInput = {
         caseDetails: JSON.stringify(data),
@@ -236,7 +266,7 @@ function AppLayoutContent() {
       const analysisResult = await generateCaseAnalysis(caseAnalysisInput);
 
       const generatedMlOutput: MlOutputData = {
-        estimatedCost: analysisResult.estimatedCost,
+        estimatedCost: analysisResult.estimatedCost, // This will now be in INR from the flow
         expectedDuration: analysisResult.expectedDuration,
         winProbability: analysisResult.winProbability,
         lossProbability: analysisResult.lossProbability,
@@ -303,10 +333,29 @@ function AppLayoutContent() {
       };
       const result = await generateDetailedCostRoadmap(roadmapInput);
       setDetailedCostRoadmap(result);
+
       if (result.error) {
         toast({ title: "Cost Roadmap Error", description: result.error, variant: "destructive" });
       } else {
         toast({ title: "Detailed Cost Roadmap Generated", description: "AI-powered cost breakdown by stage is now available." });
+        // Sum the costs from the roadmap and update mlOutput.estimatedCost
+        if (result.stages && result.stages.length > 0) {
+          const totalInrCost = sumInrCosts(result.stages);
+          setMlOutput(prevMlOutput => {
+            if (!prevMlOutput) { // If no base analysis ran, create a partial MlOutputData
+                return {
+                    estimatedCost: totalInrCost,
+                    expectedDuration: "N/A", // Or fetch from somewhere else if needed
+                    winProbability: 0, // Or fetch
+                    lossProbability: 0, // Or fetch
+                };
+            }
+            return {
+              ...prevMlOutput,
+              estimatedCost: totalInrCost,
+            };
+          });
+        }
       }
     } catch (error) {
       console.error("Error generating detailed cost roadmap:", error);
@@ -570,7 +619,6 @@ function AppLayoutContent() {
                       caseActive={!!activeCaseId && !!currentCaseDetails}
                     />
                   )}
-                  {/* Detailed Cost Roadmap Section */}
                   {activeCaseId && currentCaseDetails.enableMlPrediction && (
                     <Card className="shadow-xl border-primary/30">
                       <CardHeader>
