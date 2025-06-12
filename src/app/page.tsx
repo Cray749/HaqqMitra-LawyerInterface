@@ -10,7 +10,7 @@ import {
   MlPredictionOutput,
   DetailedCostRoadmap
 } from '@/components/app';
-import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData, DetailedCostRoadmapOutput, CaseStageCost } from '@/types';
+import type { Space, CaseDetails, UploadedFile, MlOutputData, ChatMessage as AppChatMessage, StrategySnapshotData, DetailedCostRoadmapOutput, CaseStageCost, GenerateChatbotResponseOutput, GenerateDevilsAdvocateResponseOutput } from '@/types';
 import { initialCaseDetails } from '@/types';
 import { SidebarProvider, SidebarInset, useSidebar, SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
@@ -178,11 +178,54 @@ function AppLayoutContent() {
   React.useEffect(() => {
     if (isDevilsAdvocateModeActive) {
       document.documentElement.classList.add('devil-mode');
+      document.documentElement.style.setProperty('--background', '240 10% 3.9%'); // Dark blue-gray
+      document.documentElement.style.setProperty('--foreground', '0 0% 98%'); // Almost white
+      document.documentElement.style.setProperty('--card', '240 10% 8%');
+      document.documentElement.style.setProperty('--card-foreground', '0 0% 98%');
+      document.documentElement.style.setProperty('--popover', '240 10% 8%');
+      document.documentElement.style.setProperty('--popover-foreground', '0 0% 98%');
+      document.documentElement.style.setProperty('--primary', '0 72% 51%'); // Brighter Red
+      document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
+      document.documentElement.style.setProperty('--secondary', '240 5% 15%');
+      document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
+      document.documentElement.style.setProperty('--muted', '240 5% 20%');
+      document.documentElement.style.setProperty('--muted-foreground', '0 0% 60%');
+      document.documentElement.style.setProperty('--accent', '0 60% 50%'); // Red accent
+      document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
+      document.documentElement.style.setProperty('--destructive', '0 84.2% 60.2%');
+      document.documentElement.style.setProperty('--border', '240 5% 25%');
+      document.documentElement.style.setProperty('--input', '240 5% 25%');
+      document.documentElement.style.setProperty('--ring', '0 72% 51%');
     } else {
       document.documentElement.classList.remove('devil-mode');
+      // Revert to original theme variables from globals.css (or a default light mode)
+      // This assumes your globals.css defines the default light theme without .dark selector
+      document.documentElement.style.removeProperty('--background');
+      document.documentElement.style.removeProperty('--foreground');
+      document.documentElement.style.removeProperty('--card');
+      document.documentElement.style.removeProperty('--card-foreground');
+      document.documentElement.style.removeProperty('--popover');
+      document.documentElement.style.removeProperty('--popover-foreground');
+      document.documentElement.style.removeProperty('--primary');
+      document.documentElement.style.removeProperty('--primary-foreground');
+      document.documentElement.style.removeProperty('--secondary');
+      document.documentElement.style.removeProperty('--secondary-foreground');
+      document.documentElement.style.removeProperty('--muted');
+      document.documentElement.style.removeProperty('--muted-foreground');
+      document.documentElement.style.removeProperty('--accent');
+      document.documentElement.style.removeProperty('--accent-foreground');
+      document.documentElement.style.removeProperty('--destructive');
+      document.documentElement.style.removeProperty('--border');
+      document.documentElement.style.removeProperty('--input');
+      document.documentElement.style.removeProperty('--ring');
     }
     return () => {
       document.documentElement.classList.remove('devil-mode');
+      // Ensure styles are fully reverted on component unmount
+      document.documentElement.style.removeProperty('--background');
+      document.documentElement.style.removeProperty('--foreground');
+      document.documentElement.style.removeProperty('--card');
+      // ... remove other properties as above
     };
   }, [isDevilsAdvocateModeActive]);
 
@@ -266,7 +309,7 @@ function AppLayoutContent() {
       const analysisResult = await generateCaseAnalysis(caseAnalysisInput);
 
       const generatedMlOutput: MlOutputData = {
-        estimatedCost: analysisResult.estimatedCost, // This will now be in INR from the flow
+        estimatedCost: analysisResult.estimatedCost, 
         expectedDuration: analysisResult.expectedDuration,
         winProbability: analysisResult.winProbability,
         lossProbability: analysisResult.lossProbability,
@@ -338,16 +381,15 @@ function AppLayoutContent() {
         toast({ title: "Cost Roadmap Error", description: result.error, variant: "destructive" });
       } else {
         toast({ title: "Detailed Cost Roadmap Generated", description: "AI-powered cost breakdown by stage is now available." });
-        // Sum the costs from the roadmap and update mlOutput.estimatedCost
         if (result.stages && result.stages.length > 0) {
           const totalInrCost = sumInrCosts(result.stages);
           setMlOutput(prevMlOutput => {
-            if (!prevMlOutput) { // If no base analysis ran, create a partial MlOutputData
+            if (!prevMlOutput) { 
                 return {
                     estimatedCost: totalInrCost,
-                    expectedDuration: "N/A", // Or fetch from somewhere else if needed
-                    winProbability: 0, // Or fetch
-                    lossProbability: 0, // Or fetch
+                    expectedDuration: "N/A", 
+                    winProbability: 0, 
+                    lossProbability: 0, 
                 };
             }
             return {
@@ -434,16 +476,33 @@ function AppLayoutContent() {
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
       };
 
-      const result = await generateChatbotResponse(chatbotInput);
+      const result: GenerateChatbotResponseOutput = await generateChatbotResponse(chatbotInput);
+      let botReplyText = "<p>Sorry, I encountered an error. Please try again.</p>";
+      let citations = undefined;
+      let searchResults = undefined;
+
+      if (result.error) {
+        console.error("Chatbot AI Error:", result.error);
+        toast({ title: "Chatbot Error", description: result.error, variant: "destructive"});
+        botReplyText = result.botReply || botReplyText; // Use AI's error reply if available
+      } else if (result.botReply) {
+        botReplyText = result.botReply;
+        citations = result.citations;
+        searchResults = result.searchResults;
+      } else {
+        console.error("Chatbot returned an unexpected value:", result);
+        toast({ title: "Chatbot Error", description: "Received an invalid response from the AI.", variant: "destructive"});
+      }
+
 
       const botReplyMessage: AppChatMessage = {
         id: crypto.randomUUID(),
-        text: result.botReply,
+        text: botReplyText,
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
-        citations: result.citations,
-        searchResults: result.searchResults,
+        citations: citations,
+        searchResults: searchResults,
       };
       setChatMessages(prev => [...prev, botReplyMessage]);
       await saveChatMessage(activeCaseId, botReplyMessage);
@@ -455,7 +514,7 @@ function AppLayoutContent() {
 
       const errorBotReply: AppChatMessage = {
         id: crypto.randomUUID(),
-        text: "Sorry, I encountered an error. Please try again.",
+        text: "<p>Sorry, I encountered an unexpected error. Please try again.</p>",
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
@@ -523,16 +582,32 @@ function AppLayoutContent() {
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
       };
 
-      const result = await generateDevilsAdvocateResponse(devilsAdvocateInput);
+      const result: GenerateDevilsAdvocateResponseOutput = await generateDevilsAdvocateResponse(devilsAdvocateInput);
+      let devilReplyText = "<p>The Devil is having trouble formulating a response. Please try again.</p>";
+      let citations = undefined;
+      let searchResults = undefined;
+      
+      if (result.error) {
+        console.error("Devil's Advocate AI Error:", result.error);
+        toast({ title: "Devil's Advocate Error", description: result.error, variant: "destructive"});
+        devilReplyText = result.devilReply || devilReplyText; // Use AI's error reply if available
+      } else if (result.devilReply) {
+        devilReplyText = result.devilReply;
+        citations = result.citations;
+        searchResults = result.searchResults;
+      } else {
+         console.error("generateDevilsAdvocateResponse returned an unexpected value or result.devilReply is undefined:", result);
+         toast({ title: "Devil's Advocate Error", description: "The Devil's Advocate AI did not provide a valid response structure.", variant: "destructive" });
+      }
 
       const botReplyMessage: AppChatMessage = {
         id: crypto.randomUUID(),
-        text: result.devilReply,
+        text: devilReplyText,
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
-        citations: result.citations,
-        searchResults: result.searchResults,
+        citations: citations,
+        searchResults: searchResults,
       };
       setDevilsAdvocateMessages(prev => [...prev, botReplyMessage]);
 
@@ -543,7 +618,7 @@ function AppLayoutContent() {
 
       const errorBotReply: AppChatMessage = {
         id: crypto.randomUUID(),
-        text: "The Devil is having trouble formulating a response. Please try again.",
+        text: "<p>The Devil is having trouble formulating a response due to an unexpected error. Please try again.</p>",
         sender: 'bot',
         timestamp: new Date(),
         caseId: activeCaseId,
@@ -694,20 +769,27 @@ function AppLayoutContent() {
                       )}
                       <div
                         className={cn(
-                          "max-w-[70%] rounded-xl px-4 py-2 text-sm shadow-md",
+                          "max-w-[70%] rounded-xl px-4 py-3 text-sm shadow-md prose prose-sm dark:prose-invert",
                           msg.sender === 'user'
                             ? 'bg-secondary text-secondary-foreground rounded-br-none'
                             : (viewMode === 'devilsAdvocateActive' ? 'bg-red-700 text-white rounded-bl-none' : 'bg-accent text-accent-foreground rounded-bl-none')
                         )}
                       >
-                        {msg.text}
-                        {viewMode === 'chatActive' && msg.sender === 'bot' && (msg.citations || msg.searchResults) && (
-                          <div className="mt-2 text-xs opacity-80">
+                        {msg.sender === 'bot' ? (
+                            <div dangerouslySetInnerHTML={{ __html: msg.text }} />
+                          ) : (
+                            msg.text
+                          )}
+                        {(msg.sender === 'bot' && (msg.citations || msg.searchResults)) && (
+                          <div className={cn(
+                            "mt-2 pt-2 border-t text-xs opacity-80",
+                             viewMode === 'devilsAdvocateActive' ? 'border-white/30' : 'border-accent-foreground/30'
+                             )}>
                             {msg.citations && msg.citations.length > 0 && (
                               <div><strong>Citations:</strong> {msg.citations.map((c:any, i:number) => <span key={i}>{c.text || 'source'}</span> )}</div>
                             )}
                             {msg.searchResults && msg.searchResults.length > 0 && (
-                               <div><strong>Sources:</strong> {msg.searchResults.map((s:any, i:number) => <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className="underline hover:text-accent-foreground/70">{s.title || 'link'}</a> )}</div>
+                               <div><strong>Sources:</strong> {msg.searchResults.map((s:any, i:number) => <a key={i} href={s.url} target="_blank" rel="noopener noreferrer" className={cn("underline", viewMode === 'devilsAdvocateActive' ? 'hover:text-white/70' : 'hover:text-accent-foreground/70') }>{s.title || 'link'}</a> )}</div>
                             )}
                           </div>
                         )}
@@ -825,3 +907,6 @@ function AppLayoutContent() {
     </>
   );
 }
+
+
+    

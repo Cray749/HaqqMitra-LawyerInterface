@@ -1,3 +1,4 @@
+
 import type {Config} from 'tailwindcss';
 
 export default {
@@ -104,7 +105,66 @@ export default {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
       },
+      typography: (theme: (arg0: string) => any) => ({
+        DEFAULT: {
+          css: {
+            color: theme('colors.foreground'),
+            a: {
+              color: theme('colors.primary.DEFAULT'),
+              '&:hover': {
+                color: theme('colors.primary.DEFAULT'),
+              },
+            },
+            strong: {
+              color: theme('colors.foreground'),
+            },
+            p: {
+                margin: '0 0 0.5em 0', // Reduced bottom margin for paragraphs
+            },
+            ul: {
+                margin: '0.5em 0',
+                paddingLeft: '1.5em',
+            },
+            li: {
+                margin: '0.25em 0',
+            },
+            // Add more styles as needed
+          },
+        },
+        sm: { // For smaller text contexts if needed
+          css: {
+            p: {
+                margin: '0 0 0.4em 0',
+            },
+            ul: {
+                margin: '0.4em 0',
+            },
+            li: {
+                margin: '0.2em 0',
+            },
+          },
+        },
+        invert: { // For dark mode
+          css: {
+            color: theme('colors.foreground'), // Assumes foreground is light in dark mode
+             a: {
+              color: theme('colors.primary.DEFAULT'), // Adjust if primary color changes drastically in dark mode
+              '&:hover': {
+                color: theme('colors.primary.DEFAULT'),
+              },
+            },
+             strong: {
+              color: theme('colors.foreground'),
+            },
+          }
+        }
+      }),
     },
   },
-  plugins: [require('tailwindcss-animate')],
+  plugins: [
+    require('tailwindcss-animate'),
+    require('@tailwindcss/typography'),
+  ],
 } satisfies Config;
+
+    

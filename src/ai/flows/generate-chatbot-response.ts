@@ -11,6 +11,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { GenerateChatbotResponseOutput as AppGenerateChatbotResponseOutput } from '@/types';
+
 
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
@@ -32,9 +34,10 @@ export type GenerateChatbotResponseInput = z.infer<
 >;
 
 const GenerateChatbotResponseOutputSchema = z.object({
-  botReply: z.string().describe('The generated response from the chatbot.'),
+  botReply: z.string().describe('The generated response from the chatbot, potentially using simple HTML for structure.'),
   citations: z.array(z.any()).optional().describe('Citations from Perplexity.'),
   searchResults: z.array(z.any()).optional().describe('Search results from Perplexity.'),
+  error: z.string().optional().describe('An error message if generation failed.'),
 });
 export type GenerateChatbotResponseOutput = z.infer<
   typeof GenerateChatbotResponseOutputSchema
@@ -42,7 +45,7 @@ export type GenerateChatbotResponseOutput = z.infer<
 
 export async function generateChatbotResponse(
   input: GenerateChatbotResponseInput
-): Promise<GenerateChatbotResponseOutput> {
+): Promise<AppGenerateChatbotResponseOutput> { // Use the more specific type from @/types
   return generateChatbotResponseFlow(input);
 }
 
@@ -55,50 +58,54 @@ const generateChatbotResponseFlow = ai.defineFlow(
     inputSchema: GenerateChatbotResponseInputSchema,
     outputSchema: GenerateChatbotResponseOutputSchema,
   },
-  async (input) => {
+  async (input): Promise<AppGenerateChatbotResponseOutput> => {
     const apiKey = process.env.PERPLEXITY_API_KEY;
     if (!apiKey) {
       console.error('PERPLEXITY_API_KEY is not set.');
-      throw new Error('PERPLEXITY_API_KEY is not set. Please set it in your .env.local file.');
+      return { botReply: "<p>Sorry, I cannot process your request at the moment. The API key is missing.</p>", error: 'PERPLEXITY_API_KEY is not set.' };
     }
 
     let systemPromptContent = `You are a helpful legal assistant chatbot named Case Companion.
 Your goal is to answer the user's questions accurately and concisely based on the provided context.
+Format your response using simple HTML tags for enhanced readability and structure. You can use tags like:
+- <p> for paragraphs (use these as the primary way to structure distinct thoughts).
+- <ul> for unordered lists and <li> for list items.
+- <strong> for important terms or to highlight key information.
+- <em> for emphasis.
+- <br> for line breaks if absolutely necessary within a paragraph, but prefer separate <p> tags.
+Do NOT use complex HTML, any CSS styling (e.g., style attributes), or any <script> tags.
 The context includes:
 1. Current Case Details (if available).
 2. Content from Uploaded Documents (if available and text-based).
 3. The ongoing Chat History.
 Refer to this context when formulating your answers. If the information is not in the context, say you don't have that information.
-Be polite and professional.`;
+Be polite and professional. Ensure your entire response is wrapped in appropriate HTML, starting with a <p> tag or similar.`;
 
     const messages: Array<{role: 'system' | 'user' | 'assistant'; content: string}> = [
         { role: 'system', content: systemPromptContent }
     ];
 
-    // Add existing chat history
     input.chatHistory.forEach(histMsg => {
         const lastMessage = messages[messages.length - 1];
-        // Only add history messages that maintain the alternating user/assistant pattern
         if (lastMessage && lastMessage.role !== histMsg.role) {
             messages.push({role: histMsg.role, content: histMsg.content});
         }
     });
     
-    // Add current user message with context
-    let currentMessageContent = `User asks: ${input.userMessage}`;
+    let currentMessageContent = `<p>User asks: ${input.userMessage}</p>`;
 
     if (input.caseDetails && input.caseDetails.trim() !== '{}' && input.caseDetails.trim() !== '') {
-        currentMessageContent += `\n\nRelevant Case Details (JSON format):\n${input.caseDetails}`;
+        currentMessageContent += `<p><strong>Relevant Case Details (JSON format):</strong><br><pre><code>${input.caseDetails}</code></pre></p>`;
     }
 
     if (input.uploadedDocuments && input.uploadedDocuments.length > 0) {
-      currentMessageContent += "\n\nUploaded Documents Overview (content from data URIs, if text-based):";
+      currentMessageContent += "<p><strong>Uploaded Documents Overview:</strong></p><ul>";
       input.uploadedDocuments.forEach(docDataUri => {
         if (docDataUri.startsWith('data:')) {
             try {
                 const commaIndex = docDataUri.indexOf(',');
                 if (commaIndex === -1) {
-                    currentMessageContent += `\n- Document (format error: no comma in data URI)`;
+                    currentMessageContent += `<li>Document (format error: no comma in data URI)</li>`;
                     return;
                 }
                 const meta = docDataUri.substring(0, commaIndex);
@@ -113,17 +120,18 @@ Be polite and professional.`;
                 } else if (meta.includes('image/')) {
                     docInfo = `Image Document (visual content, not processed as text).`;
                 }
-                currentMessageContent += `\n- ${docInfo}`;
+                currentMessageContent += `<li>${docInfo}</li>`;
             } catch (e) {
                 console.error("Error processing document data URI for chatbot prompt:", e);
-                currentMessageContent += `\n- Document (error processing data URI for prompt inclusion)`;
+                currentMessageContent += `<li>Document (error processing data URI for prompt inclusion)</li>`;
             }
         } else {
-            currentMessageContent += `\n- Document reference: ${docDataUri}`;
+            currentMessageContent += `<li>Document reference: ${docDataUri}</li>`;
         }
       });
+      currentMessageContent += "</ul>";
     }
-    currentMessageContent += "\n\nPlease provide your answer based on all the above information and the chat history.";
+    currentMessageContent += "<p>Please provide your answer in simple HTML format based on all the above information and the chat history.</p>";
 
     messages.push({role: 'user', content: currentMessageContent});
 
@@ -137,19 +145,17 @@ Be polite and professional.`;
         body: JSON.stringify({
           model: PERPLEXITY_MODEL,
           messages: messages,
-          // return_citations: true, // Enable if you want to process citations
-          // return_search_results: true, // Enable for search results
         }),
       });
 
       if (!response.ok) {
         const errorBody = await response.text();
         console.error('Perplexity API Error for chatbot:', response.status, errorBody);
-        throw new Error(`Perplexity API request for chatbot failed with status ${response.status}: ${errorBody}`);
+        return { botReply: `<p>Sorry, an API error occurred: ${errorBody}</p>`, error: `Perplexity API request failed: ${response.status}` };
       }
 
       const responseData = await response.json();
-      const botReply = responseData.choices[0]?.message?.content || "Sorry, I couldn't generate a response at this moment.";
+      const botReply = responseData.choices[0]?.message?.content || "<p>Sorry, I couldn't generate a response at this moment.</p>";
       
       const citations = responseData.choices[0]?.message?.citations;
       const searchResults = responseData.choices[0]?.search_results;
@@ -162,10 +168,10 @@ Be polite and professional.`;
 
     } catch (error) {
       console.error('Error calling Perplexity API or processing response in generateChatbotResponseFlow:', error);
-      if (error instanceof Error) {
-        throw new Error(`Failed to generate chatbot response: ${error.message}`);
-      }
-      throw new Error('An unknown error occurred while generating the chatbot response.');
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      return { botReply: `<p>An unexpected error occurred: ${message}</p>`, error: `Failed to generate chatbot response: ${message}` };
     }
   }
 );
+
+    

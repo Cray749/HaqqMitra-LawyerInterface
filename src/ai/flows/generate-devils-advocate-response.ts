@@ -11,6 +11,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import type { GenerateDevilsAdvocateResponseOutput as AppGenerateDevilsAdvocateResponseOutput } from '@/types';
+
 
 const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
@@ -31,18 +33,22 @@ export type GenerateDevilsAdvocateResponseInput = z.infer<
   typeof GenerateDevilsAdvocateResponseInputSchema
 >;
 
+// Zod schema for Genkit internal validation
 const GenerateDevilsAdvocateResponseOutputSchema = z.object({
-  devilReply: z.string().describe("The Devil's Advocate counter-argument or challenge."),
+  devilReply: z.string().describe("The Devil's Advocate counter-argument or challenge, potentially using simple HTML for structure."),
   citations: z.array(z.any()).optional().describe('Citations from Perplexity if any.'),
   searchResults: z.array(z.any()).optional().describe('Search results from Perplexity if any.'),
+  error: z.string().optional().describe('An error message if generation failed.'),
 });
+// Type for the actual function signature, might be slightly different due to how we handle errors
 export type GenerateDevilsAdvocateResponseOutput = z.infer<
   typeof GenerateDevilsAdvocateResponseOutputSchema
 >;
 
+
 export async function generateDevilsAdvocateResponse(
   input: GenerateDevilsAdvocateResponseInput
-): Promise<GenerateDevilsAdvocateResponseOutput> {
+): Promise<AppGenerateDevilsAdvocateResponseOutput> { // Use the more specific type from @/types
   return generateDevilsAdvocateResponseFlow(input);
 }
 
@@ -55,18 +61,33 @@ const generateDevilsAdvocateResponseFlow = ai.defineFlow(
     inputSchema: GenerateDevilsAdvocateResponseInputSchema,
     outputSchema: GenerateDevilsAdvocateResponseOutputSchema,
   },
-  async (input) => {
+  async (input): Promise<AppGenerateDevilsAdvocateResponseOutput> => {
     const apiKey = process.env.PERPLEXITY_API_KEY;
     if (!apiKey) {
       console.error('PERPLEXITY_API_KEY is not set for Devil\'s Advocate.');
-      throw new Error('PERPLEXITY_API_KEY is not set. Please set it in your .env.local file.');
+      return { devilReply: "<p>I'm unable to challenge you right now. The API key is missing.</p>", error: 'PERPLEXITY_API_KEY is not set.' };
     }
 
-    const systemPrompt = `You are the "Devil's Advocate" AI. Your role is to critically challenge the user's statements, arguments, and case strategy.
-Act as a skilled opposing counsel. Your goal is to find weaknesses, unstated assumptions, potential counter-arguments, and logical fallacies in the user's input.
-Be direct, incisive, and skeptical. Do not agree with the user. Your responses should provoke deeper thinking and help the user strengthen their case by anticipating opposition.
-Base your counter-arguments on the provided case details, document summaries, and the ongoing conversation history.
-If the user makes a statement, find a way to argue against it or point out its flaws from an adversarial perspective.`;
+    const systemPrompt = `You are an AI acting as a skilled opposing lawyer in a court setting. Your primary objective is to represent your assigned side (Plaintiff or Defendant) and argue fiercely for victory.
+
+Your core functions are:
+1.  **Act as Opposing Counsel:** Adopt the persona of a lawyer completely, adhering to court procedures and language.
+2.  **Strive for Victory:** Your responses must be strategic counter-arguments designed to undermine the opponent's position and strengthen your own.
+3.  **Initiate as Opposing Side:** If the scenario implies you are the Defendant's lawyer, you will be provided the first argument from the user(plaintiff's) side. If you are the Plaintiff's lawyer, then you will make the first argument.
+4.  **Be Specific and Factual:** Always include precise dates, times, and locations when relevant to an argument. Avoid vague or general statements.
+5.  **Provide Citations:** If your argument relies on information from provided documents, cite the document (e.g., "As stated in Exhibit A, page 3...") or refer to the source of the information if known.
+6.  **Maintain Objectivity:** Present arguments based on facts, evidence, and legal principles. Absolutely avoid personal opinions, emotional language, or speculative remarks not grounded in the case details or potential legal strategy.
+7.  **Utilize Case Details and Documents:** Base your counter-arguments on the detailed case information and the content of any uploaded documents. Point out discrepancies or inconsistencies in the user's statements compared to these materials.
+
+Format your counter-argument or challenge using simple HTML tags for enhanced readability and structure. You can use tags like:
+- <p> for paragraphs (use these as the primary way to structure distinct thoughts).
+- <ul> for unordered lists and <li> for list items.
+- <strong> for important terms, case citations, or key points of contention.
+- <em> for emphasis or rhetorical effect.
+- <br> for line breaks if absolutely necessary within a paragraph, but prefer separate <p> tags.
+Do NOT use complex HTML, any CSS styling (e.g., style attributes), or any <script> tags.
+Ensure your entire response is wrapped in appropriate HTML, starting with a <p> tag or similar.
+Your responses should be direct, professional, and legally oriented. You are here to challenge, scrutinize, and dismantle the user's position from the perspective of the opposing side, always with the goal of winning the case.`;
 
     const messages: Array<{role: 'system' | 'user' | 'assistant'; content: string}> = [
         { role: 'system', content: systemPrompt }
@@ -75,26 +96,26 @@ If the user makes a statement, find a way to argue against it or point out its f
     if (input.chatHistory) {
         input.chatHistory.forEach(histMsg => {
             const lastMessage = messages[messages.length - 1];
-            if (lastMessage && lastMessage.role !== histMsg.role) { // Maintain alternating roles
+            if (lastMessage && lastMessage.role !== histMsg.role) { 
                 messages.push({role: histMsg.role, content: histMsg.content});
             }
         });
     }
     
-    let currentChallengePrompt = `User's statement/argument: "${input.userStatement}"`;
+    let currentChallengePrompt = `<p>User's statement/argument: "${input.userStatement}"</p>`;
 
     if (input.caseDetails && input.caseDetails.trim() !== '{}' && input.caseDetails.trim() !== '') {
-        currentChallengePrompt += `\n\nContextual Case Details (JSON format):\n${input.caseDetails}`;
+        currentChallengePrompt += `<p><strong>Contextual Case Details (JSON format):</strong><br><pre><code>${input.caseDetails}</code></pre></p>`;
     }
 
     if (input.uploadedDocuments && input.uploadedDocuments.length > 0) {
-      currentChallengePrompt += "\n\nContextual Uploaded Documents Overview (summaries from data URIs if text):";
+      currentChallengePrompt += "<p><strong>Contextual Uploaded Documents Overview:</strong></p><ul>";
       input.uploadedDocuments.forEach(docDataUri => {
         if (docDataUri.startsWith('data:')) {
             try {
                 const commaIndex = docDataUri.indexOf(',');
                 if (commaIndex === -1) {
-                    currentChallengePrompt += `\n- Document (format error)`; return;
+                    currentChallengePrompt += `<li>Document (format error)</li>`; return;
                 }
                 const meta = docDataUri.substring(0, commaIndex);
                 const data = docDataUri.substring(commaIndex + 1);
@@ -107,17 +128,18 @@ If the user makes a statement, find a way to argue against it or point out its f
                 } else if (meta.includes('image/')) {
                     docInfo = `Image Document (visual context).`;
                 }
-                currentChallengePrompt += `\n- ${docInfo}`;
+                currentChallengePrompt += `<li>${docInfo}</li>`;
             } catch (e) {
                 console.error("Error processing document data URI for Devil's Advocate prompt:", e);
-                currentChallengePrompt += `\n- Document (error processing data URI)`;
+                currentChallengePrompt += `<li>Document (error processing data URI)</li>`;
             }
         } else {
-            currentChallengePrompt += `\n- Document reference: ${docDataUri}`;
+            currentChallengePrompt += `<li>Document reference: ${docDataUri}</li>`;
         }
       });
+      currentChallengePrompt += "</ul>";
     }
-    currentChallengePrompt += "\n\nAs the Devil's Advocate, provide your counter-argument or challenge to the user's statement based on all available information.";
+    currentChallengePrompt += "\n\n<p>As the Devil's Advocate, provide your counter-argument or challenge to the user's statement in simple HTML format based on all available information.</p>";
     messages.push({role: 'user', content: currentChallengePrompt});
 
     try {
@@ -136,11 +158,11 @@ If the user makes a statement, find a way to argue against it or point out its f
       if (!response.ok) {
         const errorBody = await response.text();
         console.error('Perplexity API Error (Devil\'s Advocate):', response.status, errorBody);
-        throw new Error(`Perplexity API request for Devil's Advocate failed with status ${response.status}: ${errorBody}`);
+        return { devilReply: `<p>My apologies, I encountered an API issue: ${errorBody}</p>`, error: `Perplexity API request failed: ${response.status}` };
       }
 
       const responseData = await response.json();
-      const devilReply = responseData.choices[0]?.message?.content || "I'm having trouble formulating a challenge right now. Perhaps your argument is too perfect... or I'm momentarily stumped.";
+      const devilReply = responseData.choices[0]?.message?.content || "<p>I'm having trouble formulating a challenge right now. Perhaps your argument is too perfect... or I'm momentarily stumped.</p>";
       
       const citations = responseData.choices[0]?.message?.citations;
       const searchResults = responseData.choices[0]?.search_results;
@@ -153,10 +175,10 @@ If the user makes a statement, find a way to argue against it or point out its f
 
     } catch (error) {
       console.error('Error in generateDevilsAdvocateResponseFlow:', error);
-      if (error instanceof Error) {
-        throw new Error(`Failed to get Devil's Advocate response: ${error.message}`);
-      }
-      throw new Error('An unknown error occurred while getting the Devil\'s Advocate response.');
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      return { devilReply: `<p>An unexpected error occurred while preparing my argument: ${message}</p>`, error: `Failed to get Devil's Advocate response: ${message}` };
     }
   }
 );
+
+    

@@ -1,4 +1,5 @@
 
+
 export interface Space {
   id: string;
   name: string;
@@ -25,7 +26,7 @@ export interface CaseDetails {
   briefDescription: string;
   filingDate?: Date;
   nextHearingDate?: Date;
-  enableMlPrediction: boolean; // This will still control if the base analysis (cost, duration, probability) runs
+  enableMlPrediction: boolean; 
 }
 
 export const initialCaseDetails: CaseDetails = {
@@ -52,7 +53,7 @@ export interface UploadedFile {
   uploadedAt?: Date; 
 }
 
-export interface MlOutputData { // Basic analysis results
+export interface MlOutputData { 
   estimatedCost: string;
   expectedDuration: string;
   winProbability: number; 
@@ -69,7 +70,7 @@ export interface StrategySnapshotData {
 
 export interface ChatMessage {
   id: string;
-  text: string;
+  text: string; // Can now contain simple HTML
   sender: 'user' | 'bot';
   timestamp: Date; 
   caseId?: string; 
@@ -85,17 +86,33 @@ export interface ChatHistoryItem {
   answer: string;
 }
 
-// New types for Detailed Cost Roadmap
 export interface CaseStageCost {
-  id: string; // For React key, can be generated client-side
+  id: string; 
   stageName: string;
   description: string;
-  estimatedCostINR: string; // e.g., "₹10,000 - ₹15,000" or "Approx. ₹20,000"
+  estimatedCostINR: string; 
 }
 
 export interface DetailedCostRoadmapOutput {
   stages: CaseStageCost[];
   citations?: any[];
   searchResults?: any[];
-  error?: string; // To communicate AI parsing/generation errors
+  error?: string; 
 }
+
+// Specific output types for flows that include an error field
+export interface GenerateChatbotResponseOutput {
+  botReply: string;
+  citations?: any[];
+  searchResults?: any[];
+  error?: string;
+}
+
+export interface GenerateDevilsAdvocateResponseOutput {
+  devilReply: string;
+  citations?: any[];
+  searchResults?: any[];
+  error?: string;
+}
+
+    
