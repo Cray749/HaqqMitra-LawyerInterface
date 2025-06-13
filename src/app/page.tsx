@@ -30,7 +30,7 @@ import {
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
-import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea'; // Changed from Input
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input'; // Keep Input for the modal
 
 
 type ViewMode = 'details' | 'chatActive' | 'devilsAdvocateActive';
@@ -103,10 +104,13 @@ function AppLayoutContent() {
   const [chatMessages, setChatMessages] = React.useState<AppChatMessage[]>([]);
   const [isBotReplying, setIsBotReplying] = React.useState(false);
   const [chatInputText, setChatInputText] = React.useState('');
+  const chatTextareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   const [devilsAdvocateMessages, setDevilsAdvocateMessages] = React.useState<AppChatMessage[]>([]);
   const [isDevilsAdvocateReplying, setIsDevilsAdvocateReplying] = React.useState(false);
   const [devilsAdvocateChatInputText, setDevilsAdvocateChatInputText] = React.useState('');
+  const devilsAdvocateTextareaRef = React.useRef<HTMLTextAreaElement>(null);
+  
   const [isDevilsAdvocateModeActive, setIsDevilsAdvocateModeActive] = React.useState(false);
 
   const [viewMode, setViewMode] = React.useState<ViewMode>('details');
@@ -116,6 +120,27 @@ function AppLayoutContent() {
   const [newCaseNameInput, setNewCaseNameInput] = React.useState('');
 
   const currentCase = React.useMemo(() => cases.find(s => s.id === activeCaseId), [cases, activeCaseId]);
+
+  // Auto-resize textarea effect
+  React.useEffect(() => {
+    if (chatTextareaRef.current) {
+      chatTextareaRef.current.style.height = 'auto'; // Reset height
+      const scrollHeight = chatTextareaRef.current.scrollHeight;
+      // Max height for approx 5 lines (assuming 20px per line + padding)
+      const maxHeight = 5 * 20 + (chatTextareaRef.current.offsetHeight - chatTextareaRef.current.clientHeight);
+      chatTextareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    }
+  }, [chatInputText]);
+
+  React.useEffect(() => {
+    if (devilsAdvocateTextareaRef.current) {
+      devilsAdvocateTextareaRef.current.style.height = 'auto'; // Reset height
+      const scrollHeight = devilsAdvocateTextareaRef.current.scrollHeight;
+      const maxHeight = 5 * 20 + (devilsAdvocateTextareaRef.current.offsetHeight - devilsAdvocateTextareaRef.current.clientHeight);
+      devilsAdvocateTextareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    }
+  }, [devilsAdvocateChatInputText]);
+
 
   React.useEffect(() => {
     const loadCases = async () => {
@@ -198,8 +223,6 @@ function AppLayoutContent() {
       document.documentElement.style.setProperty('--ring', '0 72% 51%');
     } else {
       document.documentElement.classList.remove('devil-mode');
-      // Revert to original theme variables from globals.css (or a default light mode)
-      // This assumes your globals.css defines the default light theme without .dark selector
       document.documentElement.style.removeProperty('--background');
       document.documentElement.style.removeProperty('--foreground');
       document.documentElement.style.removeProperty('--card');
@@ -221,7 +244,6 @@ function AppLayoutContent() {
     }
     return () => {
       document.documentElement.classList.remove('devil-mode');
-      // Ensure styles are fully reverted on component unmount
       document.documentElement.style.removeProperty('--background');
       document.documentElement.style.removeProperty('--foreground');
       document.documentElement.style.removeProperty('--card');
@@ -271,8 +293,10 @@ function AppLayoutContent() {
     setIsDetailedCostRoadmapLoading(false);
     setChatMessages([]);
     setChatInputText('');
+    if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
     setDevilsAdvocateMessages([]);
     setDevilsAdvocateChatInputText('');
+    if (devilsAdvocateTextareaRef.current) devilsAdvocateTextareaRef.current.style.height = 'auto';
     setIsDevilsAdvocateModeActive(false);
     setViewMode('details');
     if (showToast && activeCaseId) {
@@ -465,6 +489,8 @@ function AppLayoutContent() {
     setChatMessages(prev => [...prev, userMessage]);
     setIsBotReplying(true);
     setChatInputText('');
+    if (chatTextareaRef.current) chatTextareaRef.current.style.height = 'auto';
+
 
     try {
       await saveChatMessage(activeCaseId, userMessage);
@@ -534,6 +560,7 @@ function AppLayoutContent() {
     setViewMode('devilsAdvocateActive');
     setDevilsAdvocateMessages([]); 
     setDevilsAdvocateChatInputText('');
+    if (devilsAdvocateTextareaRef.current) devilsAdvocateTextareaRef.current.style.height = 'auto';
     toast({ title: "Devil's Advocate Mode", description: "Challenge your case! The theme has changed."});
   };
 
@@ -573,6 +600,7 @@ function AppLayoutContent() {
     setDevilsAdvocateMessages(prev => [...prev, userMessage]);
     setIsDevilsAdvocateReplying(true);
     setDevilsAdvocateChatInputText('');
+     if (devilsAdvocateTextareaRef.current) devilsAdvocateTextareaRef.current.style.height = 'auto';
 
     try {
       const devilsAdvocateInput: GenerateDevilsAdvocateResponseInput = {
@@ -582,7 +610,8 @@ function AppLayoutContent() {
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl).filter(Boolean) as string[],
       };
 
-      const result: GenerateDevilsAdvocateResponseOutput = await generateDevilsAdvocateResponse(devilsAdvocateInput);
+      const result = await generateDevilsAdvocateResponse(devilsAdvocateInput);
+      
       let devilReplyText = "<p>The Devil is having trouble formulating a response. Please try again.</p>";
       let citations = undefined;
       let searchResults = undefined;
@@ -590,7 +619,7 @@ function AppLayoutContent() {
       if (result.error) {
         console.error("Devil's Advocate AI Error:", result.error);
         toast({ title: "Devil's Advocate Error", description: result.error, variant: "destructive"});
-        devilReplyText = result.devilReply || devilReplyText; // Use AI's error reply if available
+        devilReplyText = result.devilReply || devilReplyText; 
       } else if (result.devilReply) {
         devilReplyText = result.devilReply;
         citations = result.citations;
@@ -825,33 +854,35 @@ function AppLayoutContent() {
             {(viewMode === 'chatActive' || viewMode === 'devilsAdvocateActive') && (
                 <div className="p-4 border-t bg-background">
                 <div className="flex items-center gap-2">
-                    <Input
-                    type="text"
-                    placeholder={
-                        viewMode === 'devilsAdvocateActive'
-                        ? (activeCaseId ? "Enter your argument..." : "Select a case first.")
-                        : (activeCaseId ? "Ask a question about this case..." : "Please select or create a case first")
-                    }
-                    value={viewMode === 'devilsAdvocateActive' ? devilsAdvocateChatInputText : chatInputText}
-                    onChange={(e) => viewMode === 'devilsAdvocateActive' ? setDevilsAdvocateChatInputText(e.target.value) : setChatInputText(e.target.value)}
-                    onKeyPress={(e) => {
-                        if (e.key === 'Enter') {
-                        if (viewMode === 'devilsAdvocateActive' && !isDevilsAdvocateReplying && activeCaseId) {
-                            handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
-                        } else if (viewMode === 'chatActive' && !isBotReplying && activeCaseId) {
-                            handleSendMessage(chatInputText);
-                        }
-                        }
-                    }}
-                    disabled={currentBotReplying || !activeCaseId}
-                    className="flex-1"
+                    <Textarea
+                      ref={viewMode === 'devilsAdvocateActive' ? devilsAdvocateTextareaRef : chatTextareaRef}
+                      rows={1}
+                      placeholder={
+                          viewMode === 'devilsAdvocateActive'
+                          ? (activeCaseId ? "Enter your argument..." : "Select a case first.")
+                          : (activeCaseId ? "Ask a question about this case..." : "Please select or create a case first")
+                      }
+                      value={viewMode === 'devilsAdvocateActive' ? devilsAdvocateChatInputText : chatInputText}
+                      onChange={(e) => viewMode === 'devilsAdvocateActive' ? setDevilsAdvocateChatInputText(e.target.value) : setChatInputText(e.target.value)}
+                      onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault(); // Prevent newline in textarea
+                            if (viewMode === 'devilsAdvocateActive' && !isDevilsAdvocateReplying && activeCaseId) {
+                                handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
+                            } else if (viewMode === 'chatActive' && !isBotReplying && activeCaseId) {
+                                handleSendMessage(chatInputText);
+                            }
+                          }
+                      }}
+                      disabled={currentBotReplying || !activeCaseId}
+                      className="flex-1 resize-none overflow-y-auto py-2 px-3 min-h-[2.5rem] max-h-32" // min-h for single line, max-h for ~5 lines
                     />
                     <Button
                     onClick={() => {
                         if (viewMode === 'devilsAdvocateActive' && activeCaseId) {
-                        handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
+                          handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
                         } else if (viewMode === 'chatActive' && activeCaseId) {
-                        handleSendMessage(chatInputText);
+                          handleSendMessage(chatInputText);
                         }
                     }}
                     disabled={
@@ -859,7 +890,7 @@ function AppLayoutContent() {
                         ? (!devilsAdvocateChatInputText.trim() || currentBotReplying || !activeCaseId)
                         : (!chatInputText.trim() || currentBotReplying || !activeCaseId)
                     }
-                    className={cn("px-3", viewMode === 'devilsAdvocateActive' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-accent text-accent-foreground hover:bg-accent/90')}
+                    className={cn("px-3 self-end", viewMode === 'devilsAdvocateActive' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : 'bg-accent text-accent-foreground hover:bg-accent/90')}
                     >
                     <SendHorizonal className="h-5 w-5" />
                     </Button>
@@ -907,6 +938,5 @@ function AppLayoutContent() {
     </>
   );
 }
-
 
     
