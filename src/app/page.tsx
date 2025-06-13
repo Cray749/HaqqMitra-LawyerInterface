@@ -30,7 +30,7 @@ import {
 } from '@/ai/flows';
 import { saveChatMessage, getChatMessages, clearChatHistory as clearChatHistoryService } from '@/services/chatService';
 import { getCases as fetchCases, createCase as createCaseService, updateCaseDetails as updateCaseDetailsService, deleteCase as deleteCaseService, uploadFileToCase as uploadFileToCaseService, removeFileFromCase as removeFileFromCaseService } from '@/services/caseService';
-import { Textarea } from '@/components/ui/textarea'; // Changed from Input
+import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,7 +38,7 @@ import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input'; // Keep Input for the modal
+import { Input } from '@/components/ui/input';
 
 
 type ViewMode = 'details' | 'chatActive' | 'devilsAdvocateActive';
@@ -69,7 +69,7 @@ const sumInrCosts = (stages: CaseStageCost[]): string => {
   if (isRange && minTotal !== maxTotal) {
     return `${formatInr(minTotal)} - ${formatInr(maxTotal)}`;
   }
-  return formatInr(minTotal); // Handles single values or ranges where min=max
+  return formatInr(minTotal);
 };
 
 
@@ -93,6 +93,8 @@ function AppLayoutContent() {
   const [uploadedFiles, setUploadedFiles] = React.useState<UploadedFile[]>([]);
   const [mlOutput, setMlOutput] = React.useState<MlOutputData | null>(null);
   const [isMlLoading, setIsMlLoading] = React.useState(false);
+  const [initialPredictionSubmitted, setInitialPredictionSubmitted] = React.useState(false);
+
 
   const [strategySnapshot, setStrategySnapshot] = React.useState<StrategySnapshotData | null>(null);
   const [isStrategyLoading, setIsStrategyLoading] = React.useState(false);
@@ -124,9 +126,8 @@ function AppLayoutContent() {
   // Auto-resize textarea effect
   React.useEffect(() => {
     if (chatTextareaRef.current) {
-      chatTextareaRef.current.style.height = 'auto'; // Reset height
+      chatTextareaRef.current.style.height = 'auto'; 
       const scrollHeight = chatTextareaRef.current.scrollHeight;
-      // Max height for approx 5 lines (assuming 20px per line + padding)
       const maxHeight = 5 * 20 + (chatTextareaRef.current.offsetHeight - chatTextareaRef.current.clientHeight);
       chatTextareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
     }
@@ -134,7 +135,7 @@ function AppLayoutContent() {
 
   React.useEffect(() => {
     if (devilsAdvocateTextareaRef.current) {
-      devilsAdvocateTextareaRef.current.style.height = 'auto'; // Reset height
+      devilsAdvocateTextareaRef.current.style.height = 'auto'; 
       const scrollHeight = devilsAdvocateTextareaRef.current.scrollHeight;
       const maxHeight = 5 * 20 + (devilsAdvocateTextareaRef.current.offsetHeight - devilsAdvocateTextareaRef.current.clientHeight);
       devilsAdvocateTextareaRef.current.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
@@ -171,9 +172,10 @@ function AppLayoutContent() {
 
             setCurrentCaseDetails(detailedCase.details || initialCaseDetails);
             setUploadedFiles(detailedCase.files || []);
-            setMlOutput(null);
+            setMlOutput(null); // Reset ML output on case change
             setStrategySnapshot(null);
             setDetailedCostRoadmap(null);
+            setInitialPredictionSubmitted(false); // Reset prediction submitted flag
 
             const messages = await getChatMessages(activeCaseId);
             setChatMessages(messages.map(m => ({...m, timestamp: m.timestamp instanceof Date ? m.timestamp : m.timestamp.toDate()})));
@@ -203,19 +205,19 @@ function AppLayoutContent() {
   React.useEffect(() => {
     if (isDevilsAdvocateModeActive) {
       document.documentElement.classList.add('devil-mode');
-      document.documentElement.style.setProperty('--background', '240 10% 3.9%'); // Dark blue-gray
-      document.documentElement.style.setProperty('--foreground', '0 0% 98%'); // Almost white
+      document.documentElement.style.setProperty('--background', '240 10% 3.9%'); 
+      document.documentElement.style.setProperty('--foreground', '0 0% 98%'); 
       document.documentElement.style.setProperty('--card', '240 10% 8%');
       document.documentElement.style.setProperty('--card-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--popover', '240 10% 8%');
       document.documentElement.style.setProperty('--popover-foreground', '0 0% 98%');
-      document.documentElement.style.setProperty('--primary', '0 72% 51%'); // Brighter Red
+      document.documentElement.style.setProperty('--primary', '0 72% 51%'); 
       document.documentElement.style.setProperty('--primary-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--secondary', '240 5% 15%');
       document.documentElement.style.setProperty('--secondary-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--muted', '240 5% 20%');
       document.documentElement.style.setProperty('--muted-foreground', '0 0% 60%');
-      document.documentElement.style.setProperty('--accent', '0 60% 50%'); // Red accent
+      document.documentElement.style.setProperty('--accent', '0 60% 50%'); 
       document.documentElement.style.setProperty('--accent-foreground', '0 0% 98%');
       document.documentElement.style.setProperty('--destructive', '0 84.2% 60.2%');
       document.documentElement.style.setProperty('--border', '240 5% 25%');
@@ -275,6 +277,7 @@ function AppLayoutContent() {
     if (id !== activeCaseId) {
        setActiveCaseId(id);
        setDetailedCostRoadmap(null);
+       setInitialPredictionSubmitted(false);
     }
   };
 
@@ -299,6 +302,7 @@ function AppLayoutContent() {
     if (devilsAdvocateTextareaRef.current) devilsAdvocateTextareaRef.current.style.height = 'auto';
     setIsDevilsAdvocateModeActive(false);
     setViewMode('details');
+    setInitialPredictionSubmitted(false);
     if (showToast && activeCaseId) {
       toast({ title: "Inputs Cleared", description: "Form inputs and AI outputs for the current case have been reset."});
     }
@@ -310,22 +314,21 @@ function AppLayoutContent() {
       return;
     }
     setCurrentCaseDetails(data);
+    setInitialPredictionSubmitted(false); // Reset this before new submission
+    setMlOutput(null); // Clear previous ML output
+    setStrategySnapshot(null);
+    setDetailedCostRoadmap(null);
+
     try {
       await updateCaseDetailsService(activeCaseId, data);
       toast({ title: "Case Updated", description: "Case details have been saved." });
 
       if (!data.enableMlPrediction) {
-        setMlOutput(null);
-        setStrategySnapshot(null);
-        setDetailedCostRoadmap(null);
         return;
       }
 
       setIsMlLoading(true);
-      setMlOutput(null);
-      setStrategySnapshot(null); 
-      setDetailedCostRoadmap(null);
-
+      
       const caseAnalysisInput: GenerateCaseAnalysisInput = {
         caseDetails: JSON.stringify(data),
         uploadedDocuments: uploadedFiles.map(f => f.dataUrl || f.name),
@@ -333,19 +336,21 @@ function AppLayoutContent() {
       const analysisResult = await generateCaseAnalysis(caseAnalysisInput);
 
       const generatedMlOutput: MlOutputData = {
-        estimatedCost: analysisResult.estimatedCost, 
+        estimatedCost: '', // Initially no cost, will be filled by detailed roadmap
         expectedDuration: analysisResult.expectedDuration,
         winProbability: analysisResult.winProbability,
         lossProbability: analysisResult.lossProbability,
       };
       setMlOutput(generatedMlOutput);
-      toast({ title: "Base Analysis Complete", description: "AI analysis for cost, duration, and probabilities is available."});
+      setInitialPredictionSubmitted(true); // Mark that initial prediction (duration, prob) is done
+      toast({ title: "Base Analysis Complete", description: "AI analysis for duration and probabilities is available. Generate detailed costs next."});
 
     } catch (error) {
       console.error("Error during case update or base AI analysis:", error);
       const errorMessage = error instanceof Error ? error.message : "An error occurred during AI analysis.";
       toast({ title: "Operation Failed", description: errorMessage, variant: "destructive"});
       setMlOutput(null);
+      setInitialPredictionSubmitted(false);
     } finally {
       setIsMlLoading(false);
     }
@@ -408,17 +413,18 @@ function AppLayoutContent() {
         if (result.stages && result.stages.length > 0) {
           const totalInrCost = sumInrCosts(result.stages);
           setMlOutput(prevMlOutput => {
-            if (!prevMlOutput) { 
+            // If prevMlOutput is null (e.g. initial ML prediction was skipped or failed but user still wants roadmap)
+            if (!prevMlOutput) {
                 return {
                     estimatedCost: totalInrCost,
-                    expectedDuration: "N/A", 
-                    winProbability: 0, 
-                    lossProbability: 0, 
+                    expectedDuration: "N/A", // Or some default
+                    winProbability: 0, // Or some default
+                    lossProbability: 0, // Or some default
                 };
             }
             return {
               ...prevMlOutput,
-              estimatedCost: totalInrCost,
+              estimatedCost: totalInrCost, // Update the cost in the main ML output
             };
           });
         }
@@ -510,7 +516,7 @@ function AppLayoutContent() {
       if (result.error) {
         console.error("Chatbot AI Error:", result.error);
         toast({ title: "Chatbot Error", description: result.error, variant: "destructive"});
-        botReplyText = result.botReply || botReplyText; // Use AI's error reply if available
+        botReplyText = result.botReply || botReplyText; 
       } else if (result.botReply) {
         botReplyText = result.botReply;
         citations = result.citations;
@@ -629,6 +635,7 @@ function AppLayoutContent() {
          toast({ title: "Devil's Advocate Error", description: "The Devil's Advocate AI did not provide a valid response structure.", variant: "destructive" });
       }
 
+
       const botReplyMessage: AppChatMessage = {
         id: crypto.randomUUID(),
         text: devilReplyText,
@@ -713,13 +720,16 @@ function AppLayoutContent() {
                     files={uploadedFiles}
                     onFilesChange={handleFilesChange}
                   />
-                  {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput || isStrategyLoading || strategySnapshot)) && (
+                  {(currentCaseDetails.enableMlPrediction && (isMlLoading || mlOutput || initialPredictionSubmitted || isStrategyLoading || strategySnapshot)) && (
                     <MlPredictionOutput
                       isLoading={isMlLoading}
                       data={mlOutput}
+                      initialPredictionSubmitted={initialPredictionSubmitted}
                       strategySnapshot={strategySnapshot}
                       isStrategyLoading={isStrategyLoading}
                       onGenerateStrategySnapshot={handleGenerateStrategySnapshot}
+                      onGenerateDetailedCostRoadmap={handleGenerateDetailedCostRoadmap}
+                      isDetailedCostRoadmapLoading={isDetailedCostRoadmapLoading}
                       caseActive={!!activeCaseId && !!currentCaseDetails}
                     />
                   )}
@@ -735,7 +745,7 @@ function AppLayoutContent() {
                             </div>
                             <Button 
                                 onClick={handleGenerateDetailedCostRoadmap} 
-                                disabled={isDetailedCostRoadmapLoading || !activeCaseId}
+                                disabled={isDetailedCostRoadmapLoading || !activeCaseId || !initialPredictionSubmitted} // Button enabled only after initial prediction
                                 className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-md whitespace-nowrap mt-2 sm:mt-0"
                                 size="lg"
                             >
@@ -866,7 +876,7 @@ function AppLayoutContent() {
                       onChange={(e) => viewMode === 'devilsAdvocateActive' ? setDevilsAdvocateChatInputText(e.target.value) : setChatInputText(e.target.value)}
                       onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault(); // Prevent newline in textarea
+                            e.preventDefault(); 
                             if (viewMode === 'devilsAdvocateActive' && !isDevilsAdvocateReplying && activeCaseId) {
                                 handleSendDevilsAdvocateMessage(devilsAdvocateChatInputText);
                             } else if (viewMode === 'chatActive' && !isBotReplying && activeCaseId) {
@@ -875,7 +885,7 @@ function AppLayoutContent() {
                           }
                       }}
                       disabled={currentBotReplying || !activeCaseId}
-                      className="flex-1 resize-none overflow-y-auto py-2 px-3 min-h-[2.5rem] max-h-32" // min-h for single line, max-h for ~5 lines
+                      className="flex-1 resize-none overflow-y-auto py-2 px-3 min-h-[2.5rem] max-h-32" 
                     />
                     <Button
                     onClick={() => {
@@ -938,5 +948,3 @@ function AppLayoutContent() {
     </>
   );
 }
-
-    
